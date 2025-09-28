@@ -1,0 +1,214 @@
+/* Resume Upload Component Styles */
+
+.resume-upload-container {
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.upload-dropzone {
+  border: 2px dashed #d9d9d9;
+  border-radius: 8px;
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background-color: #fafafa;
+  position: relative;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-dropzone:hover {
+  border-color: #1890ff;
+  background-color: #f0f9ff;
+}
+
+.upload-dropzone.drag-over {
+  border-color: #1890ff;
+  background-color: #e6f7ff;
+  transform: scale(1.02);
+}
+
+.upload-dropzone.loading {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.upload-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.upload-icon {
+  font-size: 48px;
+  color: #1890ff;
+  margin-bottom: 8px;
+}
+
+.upload-text {
+  text-align: center;
+}
+
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.95);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  gap: 16px;
+  backdrop-filter: blur(2px);
+}
+
+.progress-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #f0f0f0;
+  border-top: 2px solid #1890ff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.file-selected {
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  padding: 16px;
+  background-color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.3s ease;
+}
+
+.file-selected:hover {
+  border-color: #1890ff;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.1);
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.file-icon {
+  font-size: 24px;
+  color: #1890ff;
+}
+
+.file-icon-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.success-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  font-size: 12px;
+  color: #52c41a;
+  background: white;
+  border-radius: 50%;
+}
+
+.file-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.file-name {
+  font-size: 14px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.file-meta {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.resume-stats {
+  margin-top: 2px;
+}
+
+.resume-stats .small {
+  font-size: 11px;
+}
+
+.remove-button {
+  padding: 4px 8px;
+  height: auto;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.remove-button:hover {
+  background-color: #fff1f0;
+  border-color: #ff4d4f;
+}
+
+.error-alert {
+  margin-top: 16px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .upload-dropzone {
+    padding: 30px 15px;
+    min-height: 100px;
+  }
+
+  .upload-icon {
+    font-size: 36px;
+  }
+
+  .file-selected {
+    padding: 12px;
+  }
+
+  .file-info {
+    gap: 8px;
+  }
+
+  .file-icon {
+    font-size: 20px;
+  }
+}
+
+/* Accessibility improvements */
+.upload-dropzone:focus {
+  outline: 2px solid #1890ff;
+  outline-offset: 2px;
+}
+
+.remove-button:focus {
+  outline: 2px solid #ff4d4f;
+  outline-offset: 2px;
+}
