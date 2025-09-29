@@ -1,13 +1,13 @@
 const express = require('express');
 const User = require('../models/User');
-const { auth } = require('../middleware/auth');
+// Auth middleware removed
 
 const router = express.Router();
 
 // @route   GET /api/users/profile
 // @desc    Get user profile
 // @access  Private
-router.get('/profile', auth, async (req, res) => {
+router.get('/profile', async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select('-__v');
     
@@ -32,7 +32,7 @@ router.get('/profile', auth, async (req, res) => {
 // @route   PUT /api/users/profile
 // @desc    Update user profile
 // @access  Private
-router.put('/profile', auth, async (req, res) => {
+router.put('/profile', async (req, res) => {
   try {
     const { name, phone, resumeData } = req.body;
     

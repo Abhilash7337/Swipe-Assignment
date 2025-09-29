@@ -97,31 +97,7 @@ class ApiService {
     });
   }
 
-  // Session endpoints
-  async saveSession(email, sessionData) {
-    return this.request('/sessions/save', {
-      method: 'POST',
-      body: JSON.stringify({ email, sessionData }),
-    });
-  }
 
-  async getSession(email) {
-    try {
-      const response = await this.request(`/sessions/get/${encodeURIComponent(email)}`);
-      return response.session?.sessionData || null;
-    } catch (error) {
-      if (error.message.includes('not found')) {
-        return null;
-      }
-      throw error;
-    }
-  }
-
-  async deleteSession(email) {
-    return this.request(`/sessions/delete/${encodeURIComponent(email)}`, {
-      method: 'DELETE',
-    });
-  }
 
   // Interview endpoints
   async createInterview(email, candidateInfo) {

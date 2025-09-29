@@ -1,7 +1,7 @@
 const express = require('express');
 const Interview = require('../models/Interview');
 const User = require('../models/User');
-const { auth } = require('../middleware/auth');
+// Auth middleware removed
 
 const router = express.Router();
 

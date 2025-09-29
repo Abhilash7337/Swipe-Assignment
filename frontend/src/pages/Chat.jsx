@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Modal } from "antd";
 import { useDispatch, useSelector } from "react-redux";
 import { Card, Typography, Space, Button, Input, Progress, Tag, Spin } from "antd";
 import { FileTextOutlined, MessageOutlined, ClockCircleOutlined, SendOutlined } from '@ant-design/icons';
@@ -20,15 +19,7 @@ const { Title, Text } = Typography;
 const { TextArea } = Input;
 
 const Chat = () => {
-  // Welcome Back modal state
-  const [showWelcomeBackModal, setShowWelcomeBackModal] = useState(false);
-  const [sessionRestored, setSessionRestored] = useState(false);
   const [processingNewResume, setProcessingNewResume] = useState(false);
-    // Helper to get current user's email for session key
-    const getSessionEmail = () => {
-      // Prefer userInputs, fallback to extractedData
-      return userInputs.email?.trim() || extractedData?.data?.email?.trim() || null;
-    };
   const [countdown, setCountdown] = useState(3);
   const dispatch = useDispatch();
   
@@ -64,6 +55,7 @@ const Chat = () => {
   const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false);
   const [questionStartTime, setQuestionStartTime] = useState(null);
   const [finalCandidateInfo, setFinalCandidateInfo] = useState(null);
+  const [interviewId, setInterviewId] = useState(null);
   
   // Current question data
   const [activeQuestion, setActiveQuestion] = useState(null);
@@ -138,66 +130,7 @@ const Chat = () => {
     };
   }, [currentTimer, isAnswering]);
 
-  // Session persistence with backend
-  useEffect(() => {
-    const email = getSessionEmail();
-    if (!email) return;
-    
-    const sessionData = {
-      isInterviewStarted,
-      isInterviewCompleted,
-      currentQuestionIndex,
-      currentTimer,
-      isAnswering,
-      isEvaluating,
-      isGeneratingQuestion,
-      activeQuestion,
-      allQuestionsAsked,
-      allAnswers,
-      chatMessages,
-      userInputs,
-      finalCandidateInfo,
-      extractedData,
-      uploadedFile,
-      currentStep,
-      chatPhase,
-      missingFields,
-      currentMissingField,
-      currentMissingFieldIndex
-    };
-    
-    apiService.saveSession(email, sessionData).catch(error => {
-      console.error('Failed to save session:', error);
-    });
-  }, [
-    isInterviewStarted, isInterviewCompleted, currentQuestionIndex, currentTimer,
-    isAnswering, isEvaluating, isGeneratingQuestion, activeQuestion,
-    allQuestionsAsked, allAnswers, chatMessages, userInputs, finalCandidateInfo,
-    extractedData, uploadedFile, currentStep, chatPhase, missingFields, currentMissingField, currentMissingFieldIndex
-  ]);
 
-  // Restore interview state from localStorage on mount
-  // (Removed: now handled by above effect)
-
-  // Welcome Back modal countdown logic
-  useEffect(() => {
-    if (showWelcomeBackModal) {
-      if (countdown > 0) {
-        const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-        return () => clearTimeout(timer);
-      } else {
-        setShowWelcomeBackModal(false);
-        // Resume interview if it was in progress
-        if (isInterviewStarted && !isInterviewCompleted && chatPhase === 'interview') {
-          setIsAnswering(true);
-          // Restore timer if needed
-          if (currentTimer > 0) {
-            setCurrentTimer(currentTimer);
-          }
-        }
-      }
-    }
-  }, [showWelcomeBackModal, countdown, isInterviewStarted, isInterviewCompleted, chatPhase, currentTimer]);
 
   // Auto scroll to bottom
   useEffect(() => {
@@ -214,75 +147,26 @@ const Chat = () => {
       setCurrentQuestionIndex(0);
       setAllQuestionsAsked([]);
       setAllAnswers([]);
-      // Save session state immediately after starting interview
-      const email = getSessionEmail();
-      if (email) {
-        const interviewState = {
-          isInterviewStarted: true,
-          isInterviewCompleted,
-          currentQuestionIndex: 0,
-          currentTimer,
-          isAnswering,
-          isEvaluating,
-          isGeneratingQuestion,
-          activeQuestion,
-          allQuestionsAsked: [],
-          allAnswers: [],
-          chatMessages,
-          userInputs,
-          finalCandidateInfo,
-          extractedData,
-          uploadedFile,
-          currentStep,
-          chatPhase: 'interview',
-          missingFields,
-          currentMissingField,
-          currentMissingFieldIndex
-        };
-        // Save session to backend
-        const sessionData = {
-          isInterviewStarted: true,
-          isInterviewCompleted,
-          currentQuestionIndex: 0,
-          currentTimer,
-          isAnswering,
-          isEvaluating,
-          isGeneratingQuestion,
-          activeQuestion,
-          allQuestionsAsked: [],
-          allAnswers: [],
-          chatMessages,
-          userInputs,
-          finalCandidateInfo,
-          extractedData,
-          uploadedFile,
-          currentStep,
-          chatPhase: 'interview',
-          missingFields,
-          currentMissingField,
-          currentMissingFieldIndex
-        };
-        
-        apiService.saveSession(email, sessionData).then(() => {
-          console.log('✅ Interview session state saved to backend');
-        }).catch(error => {
-          console.error('Failed to save session to backend:', error);
-        });
-      }
       const startMessage = {
         id: generateMessageId(),
         type: 'bot',
         message: `🎯 **Your Technical Interview Starts Now!**\n\n**Format Reminder:**\n• 6 Questions Total: 2 Easy → 2 Medium → 2 Hard\n• Questions generated dynamically by AI  \n• Timers: Easy (20s), Medium (60s), Hard (120s)\n• Auto-submit when time expires\n\n🚀 Generating your first question...`
       };
-      
       setChatMessages([startMessage]);
       setWaitingForUserResponse(false);
-      
+
+      // Create interview in backend and store interviewId
+      const candidateEmail = finalCandidateInfo?.email || userInputs.email || extractedData?.data?.email;
+      const candidateInfo = finalCandidateInfo || extractedData?.data || userInputs;
+      const interviewRes = await apiService.createInterview(candidateEmail, candidateInfo);
+      if (interviewRes?.success && interviewRes.interview?.id) {
+        setInterviewId(interviewRes.interview.id);
+      }
+
       // Generate and show first question
       setTimeout(() => {
         generateAndShowNextQuestion();
       }, 3000);
-      
     } catch (error) {
       console.error('Failed to start interview:', error);
     }
@@ -292,11 +176,11 @@ const Chat = () => {
   const generateAndShowNextQuestion = async () => {
     try {
       setIsGeneratingQuestion(true);
-      
+
       const questionNumber = currentQuestionIndex + 1;
       const difficulty = difficultySequence[currentQuestionIndex];
       const timeLimit = timeSequence[currentQuestionIndex];
-      
+
       // Show generating message
       const generatingMessage = {
         id: generateMessageId(),
@@ -304,14 +188,14 @@ const Chat = () => {
         message: `🤖 Generating Question ${questionNumber}/6 (${difficulty.toUpperCase()})...`
       };
       setChatMessages(prev => [...prev, generatingMessage]);
-      
+
       // Generate question using AI
       const questionText = await interviewEngine.generateQuestion(
-        difficulty, 
-        questionNumber, 
+        difficulty,
+        questionNumber,
         allQuestionsAsked
       );
-      
+
       const newQuestion = {
         id: questionNumber,
         question: questionText,
@@ -323,32 +207,37 @@ const Chat = () => {
         timeTaken: null,
         feedback: null
       };
-      
+
       setActiveQuestion(newQuestion);
       setAllQuestionsAsked(prev => [...prev, questionText]);
-      
+
+      // Send question to backend immediately
+      if (interviewId) {
+        try {
+          await apiService.updateInterviewQuestion(interviewId, newQuestion);
+        } catch (err) {
+          console.error('Failed to save question to backend:', err);
+        }
+      }
+
       // Show the question
       const questionMessage = {
         id: generateMessageId(),
         type: 'bot',
-        message: `📝 **Question ${questionNumber}/6** (${difficulty.toUpperCase()}) - ${timeLimit}s
-
-${questionText}
-
-⏰ **Timer started!** You have ${timeLimit} seconds to answer.`
+        message: `📝 **Question ${questionNumber}/6** (${difficulty.toUpperCase()}) - ${timeLimit}s\n\n${questionText}\n\n⏰ **Timer started!** You have ${timeLimit} seconds to answer.`
       };
-      
+
       setChatMessages(prev => [...prev.slice(0, -1), questionMessage]); // Replace generating message
-      
+
       // Start timer and answering mode
       setCurrentTimer(timeLimit);
       setIsAnswering(true);
       setQuestionStartTime(Date.now());
       setIsGeneratingQuestion(false);
-      
+
     } catch (error) {
       console.error('Failed to generate question:', error);
-      
+
       const errorMessage = {
         id: Date.now(),
         type: 'system',
@@ -489,18 +378,24 @@ ${questionText}
         type: 'system',
         message: `🎉 **Interview Complete!** Generating your comprehensive results...`
       };
-      
       setChatMessages(prev => [...prev, completionMessage]);
-      
+
+      // Save all answers to backend
+      if (interviewId && allAnswers.length > 0) {
+        try {
+          await apiService.completeInterview(interviewId, allAnswers);
+        } catch (err) {
+          console.error('Failed to save interview answers:', err);
+        }
+      }
+
       // Set interview as completed and show results
       setTimeout(() => {
         setIsInterviewCompleted(true);
         setIsInterviewStarted(false);
       }, 2000);
-      
     } catch (error) {
       console.error('Failed to finish interview:', error);
-      
       const errorMessage = {
         id: Date.now(),
         type: 'system',
@@ -536,39 +431,7 @@ ${questionText}
       setUploadedFile(file);
       setExtractedData(data);
       
-      // Check if user already has complete information in backend
-      const email = data.data.email;
-      if (email) {
-        try {
-          const sessionData = await apiService.getSession(email);
-          console.log('🔍 Checking existing session for email:', email, 'sessionData:', sessionData);
-          
-          if (sessionData && sessionData.userInputs && 
-              sessionData.userInputs.name && sessionData.userInputs.email && sessionData.userInputs.phone) {
-            
-            // User already has complete information, skip data collection
-            console.log('✅ User already has complete information, skipping data collection', sessionData.userInputs);
-            setCurrentStep(1);
-            setChatPhase('ready');
-            setUserInputs(sessionData.userInputs);
-            setFinalCandidateInfo(sessionData.finalCandidateInfo || sessionData.userInputs);
-            
-            // Show ready message
-            const readyMessage = {
-              id: Date.now(),
-              type: 'bot',
-              message: `✅ **Welcome Back!**\n\n**Your Profile:**\n• Name: ${sessionData.userInputs.name}\n• Email: ${sessionData.userInputs.email}\n• Phone: ${sessionData.userInputs.phone}\n\n🎯 Ready to start your technical interview?`
-            };
-            setChatMessages([readyMessage]);
-            setProcessingNewResume(false);
-            return;
-          } else {
-            console.log('ℹ️ Session found but incomplete user data:', sessionData?.userInputs);
-          }
-        } catch (error) {
-          console.log('ℹ️ No existing session found, proceeding with data collection', error);
-        }
-      }
+
       
       // Switch to chat interface for data collection
       console.log('🔄 Setting currentStep to 1');
@@ -578,13 +441,8 @@ ${questionText}
       // Start chatbot conversation
       console.log('⏰ Starting timeout for chatbot conversation');
       setTimeout(() => {
-        // Only start chatbot conversation if no session was restored
-        if (!sessionRestored) {
-          console.log('🤖 Starting chatbot conversation');
-          startChatbotConversation(data);
-        } else {
-          console.log('🔄 Session was restored, skipping chatbot conversation');
-        }
+        console.log('🤖 Starting chatbot conversation');
+        startChatbotConversation(data);
       }, 1000);
     } else {
       console.error('❌ Text extraction failed:', result.error);
@@ -884,135 +742,10 @@ Are you ready to start your technical interview? Type "yes", "start", or "ready"
     }
   };
 
-  // Session restoration from backend
-  useEffect(() => {
-    const email = userInputs.email?.trim() || extractedData?.data?.email?.trim();
-    if (!email || processingNewResume) return; // Don't restore session if processing new resume
-    
-    apiService.getSession(email).then((sessionData) => {
-      if (sessionData && !sessionData.isInterviewCompleted && 
-          (sessionData.isInterviewStarted || 
-           (sessionData.allQuestionsAsked && sessionData.allQuestionsAsked.length > 0) ||
-           (sessionData.userInputs && sessionData.userInputs.name && sessionData.userInputs.email && sessionData.userInputs.phone) ||
-           sessionData.chatPhase === 'collecting' || sessionData.chatPhase === 'ready')) {
-        
-        // Restore all state from session
-        setIsInterviewCompleted(sessionData.isInterviewCompleted);
-        setCurrentQuestionIndex(sessionData.currentQuestionIndex);
-        setAllQuestionsAsked(sessionData.allQuestionsAsked);
-        setAllAnswers(sessionData.allAnswers);
-        setChatMessages(sessionData.chatMessages);
-        setUserInputs(sessionData.userInputs);
-        setFinalCandidateInfo(sessionData.finalCandidateInfo);
-        setExtractedData(sessionData.extractedData);
-        setUploadedFile(sessionData.uploadedFile);
-        setCurrentStep(sessionData.currentStep);
-        setChatPhase(sessionData.chatPhase);
-        
-        // Only restore interview-specific states if we're actually in the interview phase
-        if (sessionData.chatPhase === 'interview') {
-          setIsInterviewStarted(sessionData.isInterviewStarted);
-          setCurrentTimer(sessionData.currentTimer);
-          setIsAnswering(sessionData.isAnswering);
-          setIsEvaluating(sessionData.isEvaluating);
-          setIsGeneratingQuestion(sessionData.isGeneratingQuestion);
-          setActiveQuestion(sessionData.activeQuestion);
-        } else {
-          // Reset interview states if not in interview phase
-          setIsInterviewStarted(false);
-          setCurrentTimer(0);
-          setIsAnswering(false);
-          setIsEvaluating(false);
-          setIsGeneratingQuestion(false);
-          setActiveQuestion(null);
-          
-          // For collecting phase, set appropriate states
-          if (sessionData.chatPhase === 'collecting') {
-            setWaitingForUserResponse(true);
-          }
-        }
-        
-        setMissingFields(sessionData.missingFields);
-        setCurrentMissingField(sessionData.currentMissingField);
-        setCurrentMissingFieldIndex(sessionData.currentMissingFieldIndex);
-        setShowWelcomeBackModal(true);
-        setSessionRestored(true);
-        
-        // If we're in collecting phase and have a current missing field, we need to display the question
-        if (sessionData.chatPhase === 'collecting' && sessionData.currentMissingField && sessionData.chatMessages) {
-          // Check if the last message is a question for the current missing field
-          const lastMessage = sessionData.chatMessages[sessionData.chatMessages.length - 1];
-          const fieldQuestions = {
-            name: "What's your full name?",
-            email: "What's your email address?", 
-            phone: "What's your phone number?"
-          };
-          
-          // If the last message is not the current question, add it
-          if (!lastMessage || !lastMessage.message.includes(fieldQuestions[sessionData.currentMissingField])) {
-            const questionMessage = {
-              id: Date.now(),
-              type: 'bot',
-              message: fieldQuestions[sessionData.currentMissingField]
-            };
-            
-            setTimeout(() => {
-              setChatMessages(prev => [...prev, questionMessage]);
-              setWaitingForUserResponse(true);
-            }, 3000); // After welcome modal closes
-          } else {
-            // Question is already there, just ensure we're waiting for response
-            setTimeout(() => {
-              setWaitingForUserResponse(true);
-            }, 3000);
-          }
-        }
-        
-        // Check if we have complete user information and should skip data collection
-        if (sessionData.userInputs && sessionData.userInputs.name && sessionData.userInputs.email && sessionData.userInputs.phone) {
-          // We have complete information, set to ready phase if not already in interview
-          if (sessionData.chatPhase !== 'interview') {
-            setChatPhase('ready');
-            setCurrentStep(1);
-            
-            // Show a message asking if they want to start the interview
-            setTimeout(() => {
-              const readyMessage = {
-                id: Date.now(),
-                type: 'bot',
-                message: `✅ **Profile Complete!**\n\n**Your Information:**\n• Name: ${sessionData.userInputs.name}\n• Email: ${sessionData.userInputs.email}\n• Phone: ${sessionData.userInputs.phone}\n\n🎯 Ready to start your technical interview?`
-              };
-              setChatMessages(prev => [...prev, readyMessage]);
-            }, 3000); // After welcome modal closes
-          }
-        }
-        
-        console.log('✅ Session restored from backend for', email);
-      } else {
-        setSessionRestored(false);
-        console.log('ℹ️ No session to restore for', email);
-      }
-    }).catch(error => {
-      console.error('Failed to restore session:', error);
-      setSessionRestored(false);
-    });
-  }, [extractedData?.data?.email, userInputs.email, processingNewResume]);
+
 
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-      {/* Welcome Back Modal */}
-      {showWelcomeBackModal && (
-        <Modal
-          open={showWelcomeBackModal}
-          footer={null}
-          closable={false}
-          centered
-        >
-          <Title level={3}>Welcome Back!</Title>
-          <Text>Resuming your interview in {countdown}...</Text>
-        </Modal>
-      )}
-
       <Title level={2}>
         <MessageOutlined /> AI Technical Interview System
       </Title>
