@@ -10,12 +10,16 @@ import ChatMessages from "../cmp/Chat/ChatMessages";
 import ChatInput from "../cmp/Chat/ChatInput";
 import InterviewStatusBar from "../cmp/Chat/InterviewStatusBar";
 import LoadingIndicator from "../cmp/Chat/LoadingIndicator";
+import { useIndexedDB } from "../util/useIndexedDB";
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 
 const Chat = () => {
   const dispatch = useDispatch();
+  
+  // IndexedDB hook
+  const { saveUser, isInitialized, isLoading: dbLoading, error: dbError } = useIndexedDB();
   
   // Basic states
   const [uploadedFile, setUploadedFile] = useState(null);
@@ -77,6 +81,56 @@ const Chat = () => {
     const newId = `msg_${Date.now()}_${messageIdCounter}_${Math.random().toString(36).substr(2, 9)}`;
     setMessageIdCounter(prev => prev + 1);
     return newId;
+  };
+
+  // Save user data to IndexedDB
+  const saveUserToIndexedDB = async (finalName, finalEmail, finalPhone) => {
+    try {
+      // Only save if IndexedDB is initialized and we have valid data
+      if (!isInitialized || !finalName || !finalEmail || !finalPhone) {
+        console.log('⚠️ Skipping IndexedDB save - missing data or DB not ready');
+        return;
+      }
+
+      // Skip if any field contains "Not provided" or is too short
+      if (finalName === 'Not provided' || finalEmail === 'Not provided' || finalPhone === 'Not provided') {
+        console.log('⚠️ Skipping IndexedDB save - incomplete user data');
+        return;
+      }
+
+      // Additional validation
+      if (finalName.trim().length < 2) {
+        console.log('⚠️ Skipping IndexedDB save - name too short');
+        return;
+      }
+
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(finalEmail.trim())) {
+        console.log('⚠️ Skipping IndexedDB save - invalid email format');
+        return;
+      }
+
+      const phoneDigits = finalPhone.replace(/\D/g, '');
+      if (phoneDigits.length < 10 || phoneDigits.length > 15) {
+        console.log('⚠️ Skipping IndexedDB save - invalid phone number');
+        return;
+      }
+
+      const userData = {
+        name: finalName.trim(),
+        email: finalEmail.trim(),
+        phone: finalPhone.trim()
+      };
+
+      console.log('💾 Saving user to IndexedDB:', userData);
+      const result = await saveUser(userData);
+      
+      if (result.success) {
+        console.log(`✅ User ${result.action} in IndexedDB:`, result.user.email);
+      }
+    } catch (error) {
+      console.error('❌ Failed to save user to IndexedDB:', error);
+      // Don't throw error - just log it so the interview flow continues
+    }
   };
 
   // Timer effect
@@ -516,7 +570,7 @@ ${questionText}
   };
 
   // Ask user if they want to start the interview
-  const askToStartInterview = (data, currentUserInputs = userInputs) => {
+  const askToStartInterview = async (data, currentUserInputs = userInputs) => {
     // Create final merged data with user inputs taking priority
     const finalName = currentUserInputs.name?.trim() || extractedData?.data?.name || 'Not provided';
     const finalEmail = currentUserInputs.email?.trim() || extractedData?.data?.email || 'Not provided';
@@ -530,6 +584,9 @@ ${questionText}
       finalEmail, 
       finalPhone 
     });
+
+    // Save user data to IndexedDB
+    await saveUserToIndexedDB(finalName, finalEmail, finalPhone);
     
     setBotIsTyping(true);
     const readyMessage = {
@@ -642,6 +699,10 @@ Are you ready to start your technical interview? Type "yes", "start", or "ready"
           email: finalEmail, 
           phone: finalPhone
         };
+        
+        // Save user data to IndexedDB before starting interview
+        await saveUserToIndexedDB(finalName, finalEmail, finalPhone);
+        
         // Store final candidate info for results
         setFinalCandidateInfo(finalCandidateInfo);
         dispatch(setCandidateInfo(finalCandidateInfo));
