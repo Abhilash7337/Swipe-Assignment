@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Card, Typography, Space, Button, Input, Progress, Tag, Spin } from "antd";
 import { FileTextOutlined, MessageOutlined, ClockCircleOutlined, SendOutlined } from '@ant-design/icons';
-import ResumeUpload from "../cmp/Chat/ResumeUpload";
+import ResumeUploadSection from "../cmp/Chat/ResumeUploadSection";
+import DataCollectionChat from "../cmp/Chat/DataCollectionChat";
+import InterviewChat from "../cmp/Chat/InterviewChat";
+import InterviewResultsContainer from "../cmp/Chat/InterviewResultsContainer";
 import InterviewEngine from "../cmp/Chat/InterviewEngine";
-import InterviewResults from "../cmp/Chat/InterviewResults";
 import { setCandidateInfo } from "../feat/cand";
 import ChatMessages from "../cmp/Chat/ChatMessages";
 import ChatInput from "../cmp/Chat/ChatInput";
@@ -753,152 +755,66 @@ Are you ready to start your technical interview? Type "yes", "start", or "ready"
         <MessageOutlined /> AI Technical Interview System
       </Title>
       
+
       {/* Interview Results */}
-      {isInterviewCompleted && (
-        <InterviewResults 
-          candidateInfo={finalCandidateInfo}
-          allAnswers={allAnswers}
-          totalQuestions={6}
-          onClose={() => {
-            // Reset interview state for new interview
-            setIsInterviewCompleted(false);
-            setCurrentStep(0);
-            setAllAnswers([]);
-            setCurrentQuestionIndex(0);
-            setChatMessages([]);
-            setUserInputs({ name: '', email: '', phone: '' });
-            setExtractedData(null);
-            setChatPhase('upload');
-          }}
-        />
-      )}
-      
+      <InterviewResultsContainer
+        isInterviewCompleted={isInterviewCompleted}
+        finalCandidateInfo={finalCandidateInfo}
+        allAnswers={allAnswers}
+        onReset={() => {
+          setIsInterviewCompleted(false);
+          setCurrentStep(0);
+          setAllAnswers([]);
+          setCurrentQuestionIndex(0);
+          setChatMessages([]);
+          setUserInputs({ name: '', email: '', phone: '' });
+          setExtractedData(null);
+          setChatPhase('upload');
+        }}
+      />
+
       {/* Show interview interface only when not completed */}
       {!isInterviewCompleted && (
         <>
           {/* Step 0: Resume Upload */}
           {currentStep === 0 && (
-            <Card title="Step 1: Upload Your Resume" style={{ marginBottom: '20px' }}>
-              <Space direction="vertical" size="large" style={{ width: '100%' }}>
-                <ResumeUpload 
-                  onFileSelect={handleFileSelect} 
-                  onTextExtracted={handleTextExtracted} 
-                />
-              </Space>
-            </Card>
-          )}
-
-      {/* Step 1: Chat Interface for Data Collection */}
-      {currentStep === 1 && !isInterviewStarted && (
-        <Card 
-          title="💬 Let's Get You Ready for the Interview"
-          style={{ marginBottom: '20px' }}
-        >
-          {/* Chat Messages */}
-          <div 
-            ref={chatContainerRef}
-            style={{ 
-              height: '400px', 
-              overflowY: 'auto', 
-              marginBottom: '16px',
-              padding: '10px',
-              border: '1px solid #f0f0f0',
-              borderRadius: '6px'
-            }}
-          >
-            <ChatMessages 
-              messages={chatMessages} 
-              botIsTyping={botIsTyping} 
-              botTypingText="Bot is typing..." 
-            />
-          </div>
-
-          {/* Chat Input - only show when waiting for user response */}
-          {waitingForUserResponse && !botIsTyping && (
-            <ChatInput
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onSend={handleChatInput}
-              placeholder={
-                chatPhase === 'collecting' 
-                  ? `Enter your ${currentMissingField}...` 
-                  : 'Type your response...'
-              }
-              disabled={!chatInput.trim()}
-              buttonText="Send"
-            />
-          )}
-        </Card>
-      )}
-
-      {/* Interview Interface */}
-      {isInterviewStarted && (
-        <Card 
-          title={
-            <InterviewStatusBar 
-              isAnswering={isAnswering} 
-              currentTimer={currentTimer} 
-              currentQuestionIndex={currentQuestionIndex} 
-              label="💬 Technical Interview in Progress"
-              totalQuestions={6}
-              timerWarningColor="#ff4d4f"
-              timerNormalColor="#1890ff"
-            />
-          }
-          style={{ marginBottom: '20px' }}
-        >
-          {/* Chat Messages */}
-          <div 
-            ref={chatContainerRef}
-            style={{ 
-              height: '500px', 
-              overflowY: 'auto', 
-              marginBottom: '16px',
-              padding: '10px',
-              border: '1px solid #f0f0f0',
-              borderRadius: '6px'
-            }}
-          >
-            <ChatMessages messages={chatMessages} />
-            {/* Loading indicators */}
-            {isGeneratingQuestion && (
-              <LoadingIndicator text="AI is generating your next question..." spinnerSize="large" padding="20px" />
-            )}
-            {isEvaluating && (
-              <LoadingIndicator text="AI is evaluating your answer..." spinnerSize="large" padding="20px" />
-            )}
-          </div>
-
-          {/* Answer Input */}
-          {isAnswering && (
-            <ChatInput
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onSend={submitAnswer}
-              placeholder="Type your answer here... (keep it simple for testing)"
-              disabled={!chatInput.trim() || isEvaluating}
-              buttonText="Submit"
+            <ResumeUploadSection
+              onFileSelect={handleFileSelect}
+              onTextExtracted={handleTextExtracted}
             />
           )}
 
-          {/* Timer Progress */}
-          {isAnswering && activeQuestion && (
-            <div style={{ marginTop: '10px' }}>
-              <Progress 
-                percent={((activeQuestion.timeLimit - currentTimer) / activeQuestion.timeLimit) * 100}
-                status={currentTimer <= 10 ? 'exception' : 'normal'}
-                showInfo={false}
-                strokeColor={currentTimer <= 10 ? '#ff4d4f' : '#1890ff'}
-              />
-              <div style={{ textAlign: 'center', marginTop: '4px' }}>
-                <Text type="secondary">
-                  Question {currentQuestionIndex + 1} of 6 • {activeQuestion.difficulty.toUpperCase()} • {currentTimer}s remaining
-                </Text>
-              </div>
-            </div>
+          {/* Step 1: Chat Interface for Data Collection */}
+          {currentStep === 1 && !isInterviewStarted && (
+            <DataCollectionChat
+              ref={chatContainerRef}
+              chatMessages={chatMessages}
+              botIsTyping={botIsTyping}
+              chatInput={chatInput}
+              setChatInput={setChatInput}
+              handleChatInput={handleChatInput}
+              waitingForUserResponse={waitingForUserResponse}
+              chatPhase={chatPhase}
+              currentMissingField={currentMissingField}
+            />
           )}
-        </Card>
-      )}
+
+          {/* Interview Interface */}
+          {isInterviewStarted && (
+            <InterviewChat
+              ref={chatContainerRef}
+              isAnswering={isAnswering}
+              currentTimer={currentTimer}
+              currentQuestionIndex={currentQuestionIndex}
+              chatMessages={chatMessages}
+              isGeneratingQuestion={isGeneratingQuestion}
+              isEvaluating={isEvaluating}
+              chatInput={chatInput}
+              setChatInput={setChatInput}
+              submitAnswer={submitAnswer}
+              activeQuestion={activeQuestion}
+            />
+          )}
         </>
       )}
     </div>
