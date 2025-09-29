@@ -27,6 +27,9 @@ const Chat = () => {
   const [uploadedFile, setUploadedFile] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [extractedData, setExtractedData] = useState(null);
+  const [resumeEmail, setResumeEmail] = useState("");
+  const [pendingInterview, setPendingInterview] = useState(null);
+  const [showContinuePrompt, setShowContinuePrompt] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [missingFields, setMissingFields] = useState([]);
   
@@ -56,6 +59,7 @@ const Chat = () => {
   const [questionStartTime, setQuestionStartTime] = useState(null);
   const [finalCandidateInfo, setFinalCandidateInfo] = useState(null);
   const [interviewId, setInterviewId] = useState(null);
+  const [resumedInterviewId, setResumedInterviewId] = useState(null);
   
   // Current question data
   const [activeQuestion, setActiveQuestion] = useState(null);
@@ -318,7 +322,7 @@ const Chat = () => {
         timeTaken
       );
 
-      // Store answer data
+      // Update active question and store answer data
       const answerData = {
         ...activeQuestion,
         answered: true,
@@ -329,7 +333,48 @@ const Chat = () => {
         timedOut: timedOut
       };
       
-      setAllAnswers(prev => [...prev, answerData]);
+      // Update the active question so it's marked as answered
+      setActiveQuestion(answerData);
+      
+      // Add to all answers array
+      setAllAnswers(prev => {
+        // Check if this answer already exists
+        const existingIndex = prev.findIndex(a => a.id === answerData.id);
+        if (existingIndex !== -1) {
+          // Replace existing answer
+          const newAnswers = [...prev];
+          newAnswers[existingIndex] = answerData;
+          return newAnswers;
+        }
+        // Add new answer
+        return [...prev, answerData];
+      });
+
+      // Immediately save answer to backend
+      if (interviewId) {
+        try {
+          const result = await apiService.updateInterviewQuestion(interviewId, answerData);
+          if (result.success) {
+            console.log('✅ Answer saved to database:', answerData);
+          } else {
+            console.error('❌ Failed to save answer to database:', result);
+            // Show error message to user
+            setChatMessages(prev => [...prev, {
+              id: generateMessageId(),
+              type: 'system',
+              message: '⚠️ Warning: Had trouble saving your answer. Your progress might not be saved if you refresh.'
+            }]);
+          }
+        } catch (err) {
+          console.error('❌ Failed to save answer to database:', err);
+          // Show error message to user
+          setChatMessages(prev => [...prev, {
+            id: generateMessageId(),
+            type: 'system',
+            message: '⚠️ Warning: Had trouble saving your answer. Your progress might not be saved if you refresh.'
+          }]);
+        }
+      }
 
       // Show brief confirmation message with API status
       const isApiDown = evaluation.error === "service_unavailable";
@@ -383,7 +428,12 @@ const Chat = () => {
       // Save all answers to backend
       if (interviewId && allAnswers.length > 0) {
         try {
-          await apiService.completeInterview(interviewId, allAnswers);
+          if (resumedInterviewId) {
+            // Create a new completed session from the resumed interview
+            await apiService.completeInterviewWithNewSession(resumedInterviewId, allAnswers, true);
+          } else {
+            await apiService.completeInterview(interviewId, allAnswers);
+          }
         } catch (err) {
           console.error('Failed to save interview answers:', err);
         }
@@ -411,6 +461,63 @@ const Chat = () => {
     setSelectedFile(file);
   };
 
+  // Handle email input and check for unfinished interview
+  const handleResumeEmailChange = async (email) => {
+    setResumeEmail(email);
+    if (email && email.includes('@')) {
+      try {
+        const res = await apiService.getInterviewByEmail(email);
+        if (res.success && res.interview && res.interview.status !== 'completed') {
+          setPendingInterview(res.interview);
+          setShowContinuePrompt(true);
+        } else {
+          setPendingInterview(null);
+          setShowContinuePrompt(false);
+        }
+      } catch (err) {
+        setPendingInterview(null);
+        setShowContinuePrompt(false);
+      }
+    } else {
+      setPendingInterview(null);
+      setShowContinuePrompt(false);
+    }
+  };
+
+  // Handle email check
+  const handleResumeEmailCheck = async () => {
+    if (!resumeEmail.trim() || !resumeEmail.includes('@')) {
+      return;
+    }
+    
+    try {
+      const response = await apiService.getUnfinishedInterview(resumeEmail);
+      if (response.success && response.interview) {
+        setPendingInterview(response.interview);
+        setShowContinuePrompt(true);
+      } else {
+        setPendingInterview(null);
+        setShowContinuePrompt(false);
+      }
+    } catch (error) {
+      console.error('Failed to check for unfinished interview:', error);
+      setPendingInterview(null);
+      setShowContinuePrompt(false);
+    }
+  };
+
+  // Handle continue interview
+  const handleContinueInterview = () => {
+    if (!pendingInterview) return;
+    
+    setCurrentStep(1);
+    setChatPhase('interview');
+    setIsInterviewStarted(true);
+    restoreInterviewState(pendingInterview);
+    // remember that we resumed from an unfinished interview
+    setResumedInterviewId(pendingInterview.id || pendingInterview._id || null);
+  };
+
   // Handle text extraction success and start chatbot conversation
   const handleTextExtracted = async (result) => {
     console.log('🎯 Text Extraction Result:', result);
@@ -427,17 +534,23 @@ const Chat = () => {
           sections: ['contact', 'experience', 'education']
         }
       };
-      
       setUploadedFile(file);
       setExtractedData(data);
-      
 
-      
+      // If continuing, restore interview state
+      if (pendingInterview) {
+        restoreInterviewState(pendingInterview);
+        setCurrentStep(1);
+        setChatPhase('interview');
+        setIsInterviewStarted(true);
+        setInterviewId(pendingInterview.id);
+        return;
+      }
+
       // Switch to chat interface for data collection
       console.log('🔄 Setting currentStep to 1');
       setCurrentStep(1);
       setChatPhase('collecting');
-      
       // Start chatbot conversation
       console.log('⏰ Starting timeout for chatbot conversation');
       setTimeout(() => {
@@ -447,9 +560,93 @@ const Chat = () => {
     } else {
       console.error('❌ Text extraction failed:', result.error);
     }
-    
     // Reset the flag after processing
     setProcessingNewResume(false);
+  };
+
+  // Restore interview state from backend
+  const restoreInterviewState = (interview) => {
+    // Restore questions and answers
+    const questions = interview.questions || [];
+    
+    // Count answered questions and extract answers
+    // Check both answered field and if answer exists (for backward compatibility)
+    const answeredQuestions = questions.filter(q => q.answered === true || (q.answer && q.answer.trim() !== ''));
+    const answeredCount = answeredQuestions.length;
+    
+    // Restore all previous questions and answers in chat
+    const restoredMessages = [];
+    
+    // Welcome message
+    restoredMessages.push({
+      id: generateMessageId(),
+      type: 'bot',
+      message: `🔄 Resuming your interview from where you left off (Question ${answeredCount + 1}/6)...`
+    });
+
+    // Add all previous answered Q&A to chat history
+    questions.forEach((q, index) => {
+      // Only show answered questions in history (check both conditions)
+      if (q.answered === true || (q.answer && q.answer.trim() !== '')) {
+        restoredMessages.push({
+          id: generateMessageId(),
+          type: 'bot',
+          message: `📝 **Question ${index + 1}/6** (${q.difficulty.toUpperCase()}) - ${q.timeLimit}s\n\n${q.question}`
+        });
+
+        // Add the answer since this question was answered
+        restoredMessages.push({
+          id: generateMessageId(),
+          type: 'user',
+          message: q.answer
+        });
+
+        restoredMessages.push({
+          id: generateMessageId(),
+          type: 'system',
+          message: `✅ Answer recorded! Score: ${q.score}/10 - Moving to next question...`
+        });
+      }
+    });
+
+    // Set chat messages
+    setChatMessages(restoredMessages);
+    
+    // Restore progress
+    setAllQuestionsAsked(answeredQuestions.map(q => q.question));
+    setAllAnswers(answeredQuestions);
+    setCurrentQuestionIndex(answeredCount);
+    
+    // Find the next unanswered question
+    const nextUnanswered = questions.find(q => q.answered !== true && (!q.answer || q.answer.trim() === ''));
+    
+    if (nextUnanswered) {
+      setActiveQuestion(nextUnanswered);
+      setCurrentTimer(nextUnanswered.timeLimit || 20);
+      setIsAnswering(true);
+      setQuestionStartTime(Date.now());
+      
+      // Find the index of the next unanswered question for display
+      const nextQuestionIndex = questions.findIndex(q => q.answered !== true && (!q.answer || q.answer.trim() === ''));
+      
+      // Add the next question message
+      setTimeout(() => {
+        setChatMessages(prev => [...prev, {
+          id: generateMessageId(),
+          type: 'bot',
+          message: `📝 **Question ${nextQuestionIndex + 1}/6** (${nextUnanswered.difficulty.toUpperCase()}) - ${nextUnanswered.timeLimit}s\n\n${nextUnanswered.question}\n\n⏰ **Timer started!** You have ${nextUnanswered.timeLimit} seconds to answer.`
+        }]);
+      }, 1000);
+    } else if (answeredCount >= 6) {
+      // All questions answered, show completion
+      setTimeout(() => {
+        setIsInterviewCompleted(true);
+        setIsInterviewStarted(false);
+      }, 1000);
+    }
+    
+    setInterviewId(interview.id);
+    setFinalCandidateInfo(interview.candidateInfo);
   };
 
   // Start chatbot conversation after resume upload
@@ -770,12 +967,47 @@ Are you ready to start your technical interview? Type "yes", "start", or "ready"
       {/* Show interview interface only when not completed */}
       {!isInterviewCompleted && (
         <>
-          {/* Step 0: Resume Upload */}
+          {/* Step 0: Resume Upload + Email + Continue Option */}
           {currentStep === 0 && (
-            <ResumeUploadSection
-              onFileSelect={handleFileSelect}
-              onTextExtracted={handleTextExtracted}
-            />
+            <div>
+              <Card style={{ marginBottom: 16 }}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Input
+                    placeholder="Enter your email to check for unfinished interview"
+                    value={resumeEmail}
+                    onChange={(e) => setResumeEmail(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && resumeEmail.trim()) {
+                        handleResumeEmailCheck();
+                      }
+                    }}
+                    style={{ width: '100%' }}
+                  />
+                  <Button 
+                    type="primary" 
+                    onClick={handleResumeEmailCheck}
+                    disabled={!resumeEmail.trim() || !resumeEmail.includes('@')}
+                  >
+                    Check for Unfinished Interview
+                  </Button>
+                </Space>
+              </Card>
+              {showContinuePrompt && pendingInterview && (
+                <div style={{ marginBottom: 16 }}>
+                  <Tag color="orange">Unfinished interview found for {resumeEmail}</Tag>
+                  <Button type="primary" onClick={() => {
+                    setCurrentStep(1);
+                    setChatPhase('interview');
+                    setIsInterviewStarted(true);
+                    restoreInterviewState(pendingInterview);
+                  }}>Continue Previous Interview</Button>
+                </div>
+              )}
+              <ResumeUploadSection
+                onFileSelect={handleFileSelect}
+                onTextExtracted={handleTextExtracted}
+              />
+            </div>
           )}
 
           {/* Step 1: Chat Interface for Data Collection */}

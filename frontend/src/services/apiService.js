@@ -100,6 +100,9 @@ class ApiService {
 
 
   // Interview endpoints
+  async getUnfinishedInterview(email) {
+    return this.request(`/interviews/unfinished/${encodeURIComponent(email)}`);
+  }
   async createInterview(email, candidateInfo) {
     return this.request('/interviews/create', {
       method: 'POST',
@@ -118,6 +121,14 @@ class ApiService {
     return this.request(`/interviews/${interviewId}/complete`, {
       method: 'PUT',
       body: JSON.stringify({ allAnswers }),
+    });
+  }
+
+  // Complete interview but allow creating a new session from a resumed interview
+  async completeInterviewWithNewSession(interviewId, allAnswers, createNewSession = false) {
+    return this.request(`/interviews/${interviewId}/complete`, {
+      method: 'PUT',
+      body: JSON.stringify({ allAnswers, createNewSession }),
     });
   }
 

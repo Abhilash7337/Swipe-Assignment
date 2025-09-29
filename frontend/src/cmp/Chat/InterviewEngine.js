@@ -108,40 +108,104 @@ const InterviewEngine = ({ candidateInfo, resumeText, onInterviewComplete, onQue
     }
   };
 
-  // Use only Gemini API (Google Gemini 2.0 Flash - free tier)
+  // Check available AI services (Gemini and HuggingFace)
   const getAvailableAIService = () => {
     const geminiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    const huggingFaceKey = import.meta.env.VITE_HUGGINGFACE_API_KEY;
     
-    // Check if Gemini key is available
+    // Check if API keys are available
     const hasGemini = geminiKey && geminiKey !== 'your_gemini_api_key_here';
+    const hasHuggingFace = huggingFaceKey && huggingFaceKey !== 'your_huggingface_api_key_here';
     
-    if (!hasGemini) {
-      throw new Error('Gemini API key not configured. Please add VITE_GEMINI_API_KEY to your .env file.');
+    if (!hasGemini && !hasHuggingFace) {
+      throw new Error('No AI service available. Please configure either VITE_GEMINI_API_KEY or VITE_HUGGINGFACE_API_KEY in your .env file.');
     }
     
-    // Return only Gemini service
     return {
-      primary: 'gemini',
-      hasGemini: true
+      primary: hasGemini ? 'gemini' : 'huggingface',
+      hasGemini,
+      hasHuggingFace
     };
+  };
+
+  // HuggingFace API evaluation
+  const judgeAnswerWithHuggingFace = async (question, answer, difficulty, timeTaken) => {
+    const huggingFaceKey = import.meta.env.VITE_HUGGINGFACE_API_KEY;
+    
+    const prompt = `Question: "${question}"\nCandidate Answer: "${answer}"\nDifficulty: ${difficulty}\nTime Taken: ${timeTaken} seconds\n\nEvaluate this answer on a scale of 1-10 and provide brief feedback. Format response as JSON: {"score": X, "feedback": "comment"}`;
+
+    try {
+      const response = await axios.post(
+        'https://api-inference.huggingface.co/models/gpt2',
+        { inputs: prompt },
+        {
+          headers: {
+            'Authorization': `Bearer ${huggingFaceKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      // Parse the response and extract score/feedback
+      let evaluation = { score: 5, feedback: "Evaluation completed" };
+      
+      try {
+        const aiResponse = response.data[0]?.generated_text || '';
+        const jsonMatch = aiResponse.match(/\{.*\}/);
+        if (jsonMatch) {
+          evaluation = JSON.parse(jsonMatch[0]);
+        }
+      } catch (parseError) {
+        console.warn('Failed to parse HuggingFace response:', parseError);
+      }
+
+      return {
+        score: Math.max(1, Math.min(10, evaluation.score)),
+        accuracy: Math.max(0, Math.min(100, evaluation.score * 10)),
+        feedback: evaluation.feedback || "Evaluation completed"
+      };
+    } catch (error) {
+      throw new Error(`HuggingFace evaluation failed: ${error.message}`);
+    }
   };
 
   const judgeAnswer = async (question, answer, difficulty, timeTaken) => {
     const aiServices = getAvailableAIService();
     
     try {
-      // Use only Gemini API (no fallback)
-      return await judgeAnswerWithGemini(question, answer, difficulty, timeTaken);
-    } catch (error) {
-      console.error('Gemini API evaluation failed:', error);
+      // Try Gemini first if available
+      if (aiServices.hasGemini) {
+        try {
+          return await judgeAnswerWithGemini(question, answer, difficulty, timeTaken);
+        } catch (geminiError) {
+          console.error('Gemini API evaluation failed:', geminiError);
+          
+          // If HuggingFace is available, try it as fallback
+          if (aiServices.hasHuggingFace) {
+            console.log('Falling back to HuggingFace...');
+            return await judgeAnswerWithHuggingFace(question, answer, difficulty, timeTaken);
+          }
+          throw geminiError;
+        }
+      }
       
-      // Provide fallback scoring when API is unavailable
+      // If Gemini not available but HuggingFace is, use HuggingFace
+      if (aiServices.hasHuggingFace) {
+        return await judgeAnswerWithHuggingFace(question, answer, difficulty, timeTaken);
+      }
+
+      throw new Error('No AI service available');
+      
+    } catch (error) {
+      console.error('All AI services failed:', error);
+      
+      // Final fallback to local scoring
       const fallbackScore = generateFallbackScore(answer, difficulty, timeTaken);
       
       return {
         score: fallbackScore.score,
         accuracy: fallbackScore.accuracy,
-        feedback: `🤖 AI service temporarily unavailable. Estimated score based on answer length and time: ${fallbackScore.feedback}`,
+        feedback: `🤖 AI services unavailable. Estimated score based on answer length and time: ${fallbackScore.feedback}`,
         error: "service_unavailable"
       };
     }

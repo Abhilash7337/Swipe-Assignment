@@ -1,12 +1,38 @@
+
 const express = require('express');
 const Interview = require('../models/Interview');
 const User = require('../models/User');
-// Auth middleware removed
-
 const router = express.Router();
 
-// @route   POST /api/interviews/create
-// @desc    Create new interview
+// @route   GET /api/interviews/unfinished/:email
+// @desc    Get unfinished (in-progress) interview for a user by email
+// @access  Public
+router.get('/unfinished/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+    // Find user by email
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    // Find most recent unfinished interview
+    const interview = await Interview.findOne({ user: user._id, status: 'in-progress' })
+      .sort({ startedAt: -1 })
+      .select('-__v');
+    if (!interview) {
+      return res.json({ success: true, interview: null });
+    }
+    res.json({ success: true, interview });
+  } catch (error) {
+    console.error('Get unfinished interview error:', error);
+    res.status(500).json({ message: 'Server error getting unfinished interview', error: process.env.NODE_ENV === 'development' ? error.message : undefined });
+  }
+});
+
+
 // @access  Public (using email for identification)
 router.post('/create', async (req, res) => {
   try {
@@ -77,14 +103,36 @@ router.put('/:interviewId/question', async (req, res) => {
     );
 
     if (existingQuestionIndex !== -1) {
-      // Update existing question
+      // Update existing question, ensuring answered state and answer are preserved
+      const existingQuestion = interview.questions[existingQuestionIndex];
       interview.questions[existingQuestionIndex] = {
-        ...interview.questions[existingQuestionIndex],
-        ...questionData
+        ...existingQuestion,
+        ...questionData,
+        // Ensure these fields are explicitly set if provided
+        answered: questionData.answered ?? existingQuestion.answered,
+        answer: questionData.answer ?? existingQuestion.answer,
+        score: questionData.score ?? existingQuestion.score,
+        timeTaken: questionData.timeTaken ?? existingQuestion.timeTaken,
+        feedback: questionData.feedback ?? existingQuestion.feedback
       };
     } else {
       // Add new question
-      interview.questions.push(questionData);
+      interview.questions.push({
+        ...questionData,
+        // Ensure these fields have default values
+        answered: questionData.answered || false,
+        answer: questionData.answer || null,
+        score: questionData.score || null,
+        timeTaken: questionData.timeTaken || null,
+        feedback: questionData.feedback || null
+      });
+    }
+
+    // Update interview status
+    const allAnswered = interview.questions.every(q => q.answered);
+    if (allAnswered && interview.questions.length === 6) {
+      interview.status = 'completed';
+      interview.completedAt = new Date();
     }
 
     await interview.save();
@@ -110,14 +158,14 @@ router.put('/:interviewId/question', async (req, res) => {
 router.put('/:interviewId/complete', async (req, res) => {
   try {
     const { interviewId } = req.params;
-    const { allAnswers } = req.body;
+    const { allAnswers, createNewSession } = req.body;
 
     const interview = await Interview.findById(interviewId);
     if (!interview) {
       return res.status(404).json({ message: 'Interview not found' });
     }
 
-    // Update questions with final answers
+    // Merge provided answers into a working questions array
     if (allAnswers && Array.isArray(allAnswers)) {
       allAnswers.forEach(answer => {
         const questionIndex = interview.questions.findIndex(
@@ -126,17 +174,61 @@ router.put('/:interviewId/complete', async (req, res) => {
         if (questionIndex !== -1) {
           interview.questions[questionIndex] = {
             ...interview.questions[questionIndex],
-            ...answer
+            ...answer,
+            answered: true
           };
         }
       });
     }
 
-    // Mark as completed
+    // If requested, create a new interview document (preserve original as abandoned)
+    if (createNewSession) {
+      // Build new interview doc with merged questions
+      const mergedQuestions = interview.questions.map(q => ({
+        id: q.id,
+        question: q.question,
+        difficulty: q.difficulty,
+        timeLimit: q.timeLimit,
+        answered: q.answered || false,
+        answer: q.answer || null,
+        score: q.score || null,
+        timeTaken: q.timeTaken || null,
+        feedback: q.feedback || null,
+        timedOut: q.timedOut || false
+      }));
+
+      const newInterview = new Interview({
+        user: interview.user,
+        candidateInfo: interview.candidateInfo,
+        questions: mergedQuestions,
+        status: 'completed',
+        startedAt: interview.startedAt,
+        completedAt: new Date()
+      });
+
+      await newInterview.save();
+
+      // Mark original interview as abandoned so dashboard shows both
+      interview.status = 'abandoned';
+      await interview.save();
+
+      return res.json({
+        success: true,
+        message: 'Resumed interview completed and new session created',
+        interview: {
+          id: newInterview._id,
+          totalScore: newInterview.totalScore,
+          averageScore: newInterview.averageScore,
+          status: newInterview.status,
+          completedAt: newInterview.completedAt,
+          duration: newInterview.duration
+        }
+      });
+    }
+
+    // Default behavior: update existing interview and mark as completed
     interview.status = 'completed';
     interview.completedAt = new Date();
-    
-    // Calculate duration
     if (interview.startedAt) {
       const durationMs = interview.completedAt - interview.startedAt;
       interview.duration = Math.round(durationMs / (1000 * 60)); // in minutes
