@@ -5,10 +5,11 @@
 
 class IndexedDBService {
   constructor() {
-    this.dbName = 'InterviewSystemDB';
-    this.version = 2; // Increment version to remove unnecessary indexes
-    this.storeName = 'users';
-    this.db = null;
+  this.dbName = 'InterviewSystemDB';
+  this.version = 3; // Increment version for sessions store
+  this.storeName = 'users';
+  this.sessionStoreName = 'sessions';
+  this.db = null;
   }
 
   /**
@@ -34,23 +35,104 @@ class IndexedDBService {
       request.onupgradeneeded = (event) => {
         console.log('🆙 IndexedDB upgrade needed - creating schema...');
         const db = event.target.result;
-        
-        // Delete existing store if it exists (for clean recreation)
+
+        // Delete existing stores if they exist (for clean recreation)
         if (db.objectStoreNames.contains(this.storeName)) {
           console.log('🗑️ Deleting existing users store for clean recreation');
           db.deleteObjectStore(this.storeName);
         }
-        
+        if (db.objectStoreNames.contains(this.sessionStoreName)) {
+          console.log('🗑️ Deleting existing sessions store for clean recreation');
+          db.deleteObjectStore(this.sessionStoreName);
+        }
+
         // Create fresh users object store
-        const store = db.createObjectStore(this.storeName, { 
+        const store = db.createObjectStore(this.storeName, {
           keyPath: 'email' // Use email as primary key to prevent duplicates
         });
-        
         console.log('🆕 Created fresh users object store with email as primary key');
-        
-        // Verify store creation
         console.log('🔍 Created store name:', store.name);
         console.log('🔍 Store keyPath:', store.keyPath);
+
+        // Create sessions object store
+        const sessionStore = db.createObjectStore(this.sessionStoreName, {
+          keyPath: 'email' // Use email as primary key for session
+        });
+        console.log('🆕 Created sessions object store with email as primary key');
+        console.log('🔍 Created store name:', sessionStore.name);
+        console.log('🔍 Store keyPath:', sessionStore.keyPath);
+      };
+    });
+  }
+
+  // --- SESSION METHODS ---
+  /**
+   * Save or update interview session state for a user
+   * @param {string} email - User's email
+   * @param {Object} sessionData - Interview session state object
+   */
+  async saveSession(email, sessionData) {
+    if (!this.db) await this.init();
+    const cleanEmail = email.toLowerCase().trim();
+    const sessionRecord = {
+      email: cleanEmail,
+      session: sessionData,
+      updatedAt: new Date().toISOString()
+    };
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([this.sessionStoreName], 'readwrite');
+      const store = transaction.objectStore(this.sessionStoreName);
+      const request = store.put(sessionRecord);
+      request.onsuccess = () => {
+        console.log('✅ Session saved/updated for:', cleanEmail);
+        resolve({ success: true, email: cleanEmail });
+      };
+      request.onerror = () => {
+        console.error('❌ Error saving session:', request.error);
+        reject(request.error);
+      };
+    });
+  }
+
+  /**
+   * Get interview session state for a user
+   * @param {string} email - User's email
+   */
+  async getSession(email) {
+    if (!this.db) await this.init();
+    const cleanEmail = email.toLowerCase().trim();
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([this.sessionStoreName], 'readonly');
+      const store = transaction.objectStore(this.sessionStoreName);
+      const request = store.get(cleanEmail);
+      request.onsuccess = () => {
+        resolve(request.result ? request.result.session : null);
+      };
+      request.onerror = () => {
+        console.error('❌ Error getting session:', request.error);
+        reject(request.error);
+      };
+    });
+  }
+
+  /**
+   * Delete interview session state for a user
+   * @param {string} email - User's email
+   */
+  async deleteSession(email) {
+    if (!this.db) await this.init();
+    const cleanEmail = email.toLowerCase().trim();
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([this.sessionStoreName], 'readwrite');
+      const store = transaction.objectStore(this.sessionStoreName);
+      const request = store.delete(cleanEmail);
+      request.onsuccess = () => {
+        console.log('🗑️ Session deleted for:', cleanEmail);
+        resolve({ success: true, email: cleanEmail });
+      };
+      request.onerror = () => {
+        console.error('❌ Error deleting session:', request.error);
+        reject(request.error);
       };
     });
   }

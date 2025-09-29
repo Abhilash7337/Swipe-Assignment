@@ -5,7 +5,7 @@ import Dash from "./pages/Dash";
 import ApiTest from "./pages/ApiTest";
 
 const App = () => {
-  const [activeTab, setActiveTab] = useState("apitest");
+  const [activeTab, setActiveTab] = useState("chat");
 
   return (
     <div style={{ padding: 20 }}>
@@ -13,7 +13,6 @@ const App = () => {
         activeKey={activeTab}
         onChange={setActiveTab}
         items={[
-          { key: "apitest", label: "🔧 API Test", children: <ApiTest /> },
           { key: "chat", label: "Interviewee (Chat)", children: <Chat /> },
           { key: "dash", label: "Interviewer (Dashboard)", children: <Dash /> },
         ]}

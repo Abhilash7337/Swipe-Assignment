@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { Modal } from "antd";
 import { useDispatch, useSelector } from "react-redux";
 import { Card, Typography, Space, Button, Input, Progress, Tag, Spin } from "antd";
 import { FileTextOutlined, MessageOutlined, ClockCircleOutlined, SendOutlined } from '@ant-design/icons';
@@ -12,16 +13,24 @@ import ChatMessages from "../cmp/Chat/ChatMessages";
 import ChatInput from "../cmp/Chat/ChatInput";
 import InterviewStatusBar from "../cmp/Chat/InterviewStatusBar";
 import LoadingIndicator from "../cmp/Chat/LoadingIndicator";
-import { useIndexedDB } from "../util/useIndexedDB";
+// IndexedDB imports removed
+import apiService from '../services/apiService';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 
 const Chat = () => {
+  // Welcome Back modal state
+  const [showWelcomeBackModal, setShowWelcomeBackModal] = useState(false);
+  const [sessionRestored, setSessionRestored] = useState(false);
+  const [processingNewResume, setProcessingNewResume] = useState(false);
+    // Helper to get current user's email for session key
+    const getSessionEmail = () => {
+      // Prefer userInputs, fallback to extractedData
+      return userInputs.email?.trim() || extractedData?.data?.email?.trim() || null;
+    };
+  const [countdown, setCountdown] = useState(3);
   const dispatch = useDispatch();
-  
-  // IndexedDB hook
-  const { saveUser, isInitialized, isLoading: dbLoading, error: dbError } = useIndexedDB();
   
   // Basic states
   const [uploadedFile, setUploadedFile] = useState(null);
@@ -85,53 +94,29 @@ const Chat = () => {
     return newId;
   };
 
-  // Save user data to IndexedDB
-  const saveUserToIndexedDB = async (finalName, finalEmail, finalPhone) => {
+  // Save user data to backend
+  const saveUserToBackend = async (finalName, finalEmail, finalPhone) => {
     try {
-      // Only save if IndexedDB is initialized and we have valid data
-      if (!isInitialized || !finalName || !finalEmail || !finalPhone) {
-        console.log('⚠️ Skipping IndexedDB save - missing data or DB not ready');
-        return;
-      }
-
-      // Skip if any field contains "Not provided" or is too short
-      if (finalName === 'Not provided' || finalEmail === 'Not provided' || finalPhone === 'Not provided') {
-        console.log('⚠️ Skipping IndexedDB save - incomplete user data');
-        return;
-      }
-
-      // Additional validation
-      if (finalName.trim().length < 2) {
-        console.log('⚠️ Skipping IndexedDB save - name too short');
-        return;
-      }
-
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(finalEmail.trim())) {
-        console.log('⚠️ Skipping IndexedDB save - invalid email format');
-        return;
-      }
-
-      const phoneDigits = finalPhone.replace(/\D/g, '');
-      if (phoneDigits.length < 10 || phoneDigits.length > 15) {
-        console.log('⚠️ Skipping IndexedDB save - invalid phone number');
-        return;
-      }
-
       const userData = {
         name: finalName.trim(),
         email: finalEmail.trim(),
         phone: finalPhone.trim()
       };
 
-      console.log('💾 Saving user to IndexedDB:', userData);
-      const result = await saveUser(userData);
+      console.log('💾 Saving user to backend:', userData);
+      const result = await apiService.saveUser(userData);
       
       if (result.success) {
-        console.log(`✅ User ${result.action} in IndexedDB:`, result.user.email);
+        console.log(`✅ User ${result.action} in backend:`, result.user.email);
+        // Store token if provided (for new registrations)
+        if (result.token) {
+          apiService.setToken(result.token);
+        }
       }
+      return result;
     } catch (error) {
-      console.error('❌ Failed to save user to IndexedDB:', error);
-      // Don't throw error - just log it so the interview flow continues
+      console.error('❌ Failed to save user to backend:', error);
+      throw error;
     }
   };
 
@@ -153,6 +138,67 @@ const Chat = () => {
     };
   }, [currentTimer, isAnswering]);
 
+  // Session persistence with backend
+  useEffect(() => {
+    const email = getSessionEmail();
+    if (!email) return;
+    
+    const sessionData = {
+      isInterviewStarted,
+      isInterviewCompleted,
+      currentQuestionIndex,
+      currentTimer,
+      isAnswering,
+      isEvaluating,
+      isGeneratingQuestion,
+      activeQuestion,
+      allQuestionsAsked,
+      allAnswers,
+      chatMessages,
+      userInputs,
+      finalCandidateInfo,
+      extractedData,
+      uploadedFile,
+      currentStep,
+      chatPhase,
+      missingFields,
+      currentMissingField,
+      currentMissingFieldIndex
+    };
+    
+    apiService.saveSession(email, sessionData).catch(error => {
+      console.error('Failed to save session:', error);
+    });
+  }, [
+    isInterviewStarted, isInterviewCompleted, currentQuestionIndex, currentTimer,
+    isAnswering, isEvaluating, isGeneratingQuestion, activeQuestion,
+    allQuestionsAsked, allAnswers, chatMessages, userInputs, finalCandidateInfo,
+    extractedData, uploadedFile, currentStep, chatPhase, missingFields, currentMissingField, currentMissingFieldIndex
+  ]);
+
+  // Restore interview state from localStorage on mount
+  // (Removed: now handled by above effect)
+
+  // Welcome Back modal countdown logic
+  useEffect(() => {
+    if (showWelcomeBackModal) {
+      if (countdown > 0) {
+        const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+        return () => clearTimeout(timer);
+      } else {
+        setShowWelcomeBackModal(false);
+        // Resume interview if it was in progress
+        if (isInterviewStarted && !isInterviewCompleted && chatPhase === 'interview') {
+          setIsAnswering(true);
+          // Restore timer if needed
+          if (currentTimer > 0) {
+            setCurrentTimer(currentTimer);
+          }
+        }
+      }
+    }
+  }, [showWelcomeBackModal, countdown, isInterviewStarted, isInterviewCompleted, chatPhase, currentTimer]);
+
   // Auto scroll to bottom
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -168,19 +214,65 @@ const Chat = () => {
       setCurrentQuestionIndex(0);
       setAllQuestionsAsked([]);
       setAllAnswers([]);
-      
+      // Save session state immediately after starting interview
+      const email = getSessionEmail();
+      if (email) {
+        const interviewState = {
+          isInterviewStarted: true,
+          isInterviewCompleted,
+          currentQuestionIndex: 0,
+          currentTimer,
+          isAnswering,
+          isEvaluating,
+          isGeneratingQuestion,
+          activeQuestion,
+          allQuestionsAsked: [],
+          allAnswers: [],
+          chatMessages,
+          userInputs,
+          finalCandidateInfo,
+          extractedData,
+          uploadedFile,
+          currentStep,
+          chatPhase: 'interview',
+          missingFields,
+          currentMissingField,
+          currentMissingFieldIndex
+        };
+        // Save session to backend
+        const sessionData = {
+          isInterviewStarted: true,
+          isInterviewCompleted,
+          currentQuestionIndex: 0,
+          currentTimer,
+          isAnswering,
+          isEvaluating,
+          isGeneratingQuestion,
+          activeQuestion,
+          allQuestionsAsked: [],
+          allAnswers: [],
+          chatMessages,
+          userInputs,
+          finalCandidateInfo,
+          extractedData,
+          uploadedFile,
+          currentStep,
+          chatPhase: 'interview',
+          missingFields,
+          currentMissingField,
+          currentMissingFieldIndex
+        };
+        
+        apiService.saveSession(email, sessionData).then(() => {
+          console.log('✅ Interview session state saved to backend');
+        }).catch(error => {
+          console.error('Failed to save session to backend:', error);
+        });
+      }
       const startMessage = {
         id: generateMessageId(),
         type: 'bot',
-        message: `🎯 **Your Technical Interview Starts Now!**
-
-**Format Reminder:**
-• 6 Questions Total: 2 Easy → 2 Medium → 2 Hard
-• Questions generated dynamically by AI  
-• Timers: Easy (20s), Medium (60s), Hard (120s)
-• Auto-submit when time expires
-
-🚀 Generating your first question...`
+        message: `🎯 **Your Technical Interview Starts Now!**\n\n**Format Reminder:**\n• 6 Questions Total: 2 Easy → 2 Medium → 2 Hard\n• Questions generated dynamically by AI  \n• Timers: Easy (20s), Medium (60s), Hard (120s)\n• Auto-submit when time expires\n\n🚀 Generating your first question...`
       };
       
       setChatMessages([startMessage]);
@@ -425,8 +517,9 @@ ${questionText}
   };
 
   // Handle text extraction success and start chatbot conversation
-  const handleTextExtracted = (result) => {
+  const handleTextExtracted = async (result) => {
     console.log('🎯 Text Extraction Result:', result);
+    setProcessingNewResume(true);
     
     if (result.success) {
       const file = selectedFile;
@@ -443,7 +536,41 @@ ${questionText}
       setUploadedFile(file);
       setExtractedData(data);
       
-      // Switch to chat interface
+      // Check if user already has complete information in backend
+      const email = data.data.email;
+      if (email) {
+        try {
+          const sessionData = await apiService.getSession(email);
+          console.log('🔍 Checking existing session for email:', email, 'sessionData:', sessionData);
+          
+          if (sessionData && sessionData.userInputs && 
+              sessionData.userInputs.name && sessionData.userInputs.email && sessionData.userInputs.phone) {
+            
+            // User already has complete information, skip data collection
+            console.log('✅ User already has complete information, skipping data collection', sessionData.userInputs);
+            setCurrentStep(1);
+            setChatPhase('ready');
+            setUserInputs(sessionData.userInputs);
+            setFinalCandidateInfo(sessionData.finalCandidateInfo || sessionData.userInputs);
+            
+            // Show ready message
+            const readyMessage = {
+              id: Date.now(),
+              type: 'bot',
+              message: `✅ **Welcome Back!**\n\n**Your Profile:**\n• Name: ${sessionData.userInputs.name}\n• Email: ${sessionData.userInputs.email}\n• Phone: ${sessionData.userInputs.phone}\n\n🎯 Ready to start your technical interview?`
+            };
+            setChatMessages([readyMessage]);
+            setProcessingNewResume(false);
+            return;
+          } else {
+            console.log('ℹ️ Session found but incomplete user data:', sessionData?.userInputs);
+          }
+        } catch (error) {
+          console.log('ℹ️ No existing session found, proceeding with data collection', error);
+        }
+      }
+      
+      // Switch to chat interface for data collection
       console.log('🔄 Setting currentStep to 1');
       setCurrentStep(1);
       setChatPhase('collecting');
@@ -451,12 +578,20 @@ ${questionText}
       // Start chatbot conversation
       console.log('⏰ Starting timeout for chatbot conversation');
       setTimeout(() => {
-        console.log('🤖 Starting chatbot conversation');
-        startChatbotConversation(data);
+        // Only start chatbot conversation if no session was restored
+        if (!sessionRestored) {
+          console.log('🤖 Starting chatbot conversation');
+          startChatbotConversation(data);
+        } else {
+          console.log('🔄 Session was restored, skipping chatbot conversation');
+        }
       }, 1000);
     } else {
       console.error('❌ Text extraction failed:', result.error);
     }
+    
+    // Reset the flag after processing
+    setProcessingNewResume(false);
   };
 
   // Start chatbot conversation after resume upload
@@ -587,8 +722,8 @@ ${questionText}
       finalPhone 
     });
 
-    // Save user data to IndexedDB
-    await saveUserToIndexedDB(finalName, finalEmail, finalPhone);
+    // Save user data to backend
+    await saveUserToBackend(finalName, finalEmail, finalPhone);
     
     setBotIsTyping(true);
     const readyMessage = {
@@ -702,8 +837,8 @@ Are you ready to start your technical interview? Type "yes", "start", or "ready"
           phone: finalPhone
         };
         
-        // Save user data to IndexedDB before starting interview
-        await saveUserToIndexedDB(finalName, finalEmail, finalPhone);
+        // Save user data to backend before starting interview
+        await saveUserToBackend(finalName, finalEmail, finalPhone);
         
         // Store final candidate info for results
         setFinalCandidateInfo(finalCandidateInfo);
@@ -749,12 +884,138 @@ Are you ready to start your technical interview? Type "yes", "start", or "ready"
     }
   };
 
+  // Session restoration from backend
+  useEffect(() => {
+    const email = userInputs.email?.trim() || extractedData?.data?.email?.trim();
+    if (!email || processingNewResume) return; // Don't restore session if processing new resume
+    
+    apiService.getSession(email).then((sessionData) => {
+      if (sessionData && !sessionData.isInterviewCompleted && 
+          (sessionData.isInterviewStarted || 
+           (sessionData.allQuestionsAsked && sessionData.allQuestionsAsked.length > 0) ||
+           (sessionData.userInputs && sessionData.userInputs.name && sessionData.userInputs.email && sessionData.userInputs.phone) ||
+           sessionData.chatPhase === 'collecting' || sessionData.chatPhase === 'ready')) {
+        
+        // Restore all state from session
+        setIsInterviewCompleted(sessionData.isInterviewCompleted);
+        setCurrentQuestionIndex(sessionData.currentQuestionIndex);
+        setAllQuestionsAsked(sessionData.allQuestionsAsked);
+        setAllAnswers(sessionData.allAnswers);
+        setChatMessages(sessionData.chatMessages);
+        setUserInputs(sessionData.userInputs);
+        setFinalCandidateInfo(sessionData.finalCandidateInfo);
+        setExtractedData(sessionData.extractedData);
+        setUploadedFile(sessionData.uploadedFile);
+        setCurrentStep(sessionData.currentStep);
+        setChatPhase(sessionData.chatPhase);
+        
+        // Only restore interview-specific states if we're actually in the interview phase
+        if (sessionData.chatPhase === 'interview') {
+          setIsInterviewStarted(sessionData.isInterviewStarted);
+          setCurrentTimer(sessionData.currentTimer);
+          setIsAnswering(sessionData.isAnswering);
+          setIsEvaluating(sessionData.isEvaluating);
+          setIsGeneratingQuestion(sessionData.isGeneratingQuestion);
+          setActiveQuestion(sessionData.activeQuestion);
+        } else {
+          // Reset interview states if not in interview phase
+          setIsInterviewStarted(false);
+          setCurrentTimer(0);
+          setIsAnswering(false);
+          setIsEvaluating(false);
+          setIsGeneratingQuestion(false);
+          setActiveQuestion(null);
+          
+          // For collecting phase, set appropriate states
+          if (sessionData.chatPhase === 'collecting') {
+            setWaitingForUserResponse(true);
+          }
+        }
+        
+        setMissingFields(sessionData.missingFields);
+        setCurrentMissingField(sessionData.currentMissingField);
+        setCurrentMissingFieldIndex(sessionData.currentMissingFieldIndex);
+        setShowWelcomeBackModal(true);
+        setSessionRestored(true);
+        
+        // If we're in collecting phase and have a current missing field, we need to display the question
+        if (sessionData.chatPhase === 'collecting' && sessionData.currentMissingField && sessionData.chatMessages) {
+          // Check if the last message is a question for the current missing field
+          const lastMessage = sessionData.chatMessages[sessionData.chatMessages.length - 1];
+          const fieldQuestions = {
+            name: "What's your full name?",
+            email: "What's your email address?", 
+            phone: "What's your phone number?"
+          };
+          
+          // If the last message is not the current question, add it
+          if (!lastMessage || !lastMessage.message.includes(fieldQuestions[sessionData.currentMissingField])) {
+            const questionMessage = {
+              id: Date.now(),
+              type: 'bot',
+              message: fieldQuestions[sessionData.currentMissingField]
+            };
+            
+            setTimeout(() => {
+              setChatMessages(prev => [...prev, questionMessage]);
+              setWaitingForUserResponse(true);
+            }, 3000); // After welcome modal closes
+          } else {
+            // Question is already there, just ensure we're waiting for response
+            setTimeout(() => {
+              setWaitingForUserResponse(true);
+            }, 3000);
+          }
+        }
+        
+        // Check if we have complete user information and should skip data collection
+        if (sessionData.userInputs && sessionData.userInputs.name && sessionData.userInputs.email && sessionData.userInputs.phone) {
+          // We have complete information, set to ready phase if not already in interview
+          if (sessionData.chatPhase !== 'interview') {
+            setChatPhase('ready');
+            setCurrentStep(1);
+            
+            // Show a message asking if they want to start the interview
+            setTimeout(() => {
+              const readyMessage = {
+                id: Date.now(),
+                type: 'bot',
+                message: `✅ **Profile Complete!**\n\n**Your Information:**\n• Name: ${sessionData.userInputs.name}\n• Email: ${sessionData.userInputs.email}\n• Phone: ${sessionData.userInputs.phone}\n\n🎯 Ready to start your technical interview?`
+              };
+              setChatMessages(prev => [...prev, readyMessage]);
+            }, 3000); // After welcome modal closes
+          }
+        }
+        
+        console.log('✅ Session restored from backend for', email);
+      } else {
+        setSessionRestored(false);
+        console.log('ℹ️ No session to restore for', email);
+      }
+    }).catch(error => {
+      console.error('Failed to restore session:', error);
+      setSessionRestored(false);
+    });
+  }, [extractedData?.data?.email, userInputs.email, processingNewResume]);
+
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
+      {/* Welcome Back Modal */}
+      {showWelcomeBackModal && (
+        <Modal
+          open={showWelcomeBackModal}
+          footer={null}
+          closable={false}
+          centered
+        >
+          <Title level={3}>Welcome Back!</Title>
+          <Text>Resuming your interview in {countdown}...</Text>
+        </Modal>
+      )}
+
       <Title level={2}>
         <MessageOutlined /> AI Technical Interview System
       </Title>
-      
 
       {/* Interview Results */}
       <InterviewResultsContainer
