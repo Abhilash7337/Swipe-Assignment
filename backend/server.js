@@ -10,7 +10,14 @@ require('dotenv').config();
 const app = express();
 
 // Security middleware
+
 app.use(helmet());
+
+// Set a permissive Content-Security-Policy header for Render deployment
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy', "default-src *; connect-src *");
+  next();
+});
 
 // CORS - Enable before rate limiting for preflight requests
 // Configure CORS. If FRONTEND_URL is provided use it, otherwise allow reflecting origin
