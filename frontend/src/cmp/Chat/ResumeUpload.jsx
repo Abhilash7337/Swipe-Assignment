@@ -143,69 +143,76 @@ const ResumeUpload = ({ onFileSelect, onTextExtracted }) => {
   };
 
   return (
-    <div style={{ padding: '20px', border: '2px dashed #ccc', borderRadius: '8px' }}>
+    <div style={{ padding: '12px' }}>
       <div
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         style={{
-          padding: '20px',
+          padding: '28px',
           textAlign: 'center',
-          backgroundColor: '#f9f9f9',
-          borderRadius: '4px',
-          marginBottom: '20px'
+          background: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
+          border: '1px dashed rgba(16,24,40,0.08)',
+          borderRadius: 12,
+          marginBottom: 16,
+          transition: 'border-color 200ms ease'
         }}
       >
         <input
           type="file"
           accept=".pdf,.docx"
           onChange={handleFileChange}
-          style={{ marginBottom: '10px' }}
+          style={{ display: 'block', margin: '0 auto 12px' }}
         />
-        <p>Or drag and drop a PDF or DOCX file here</p>
+        <p style={{ margin: 0, color: '#475569' }}>Or drag and drop a <strong>PDF</strong> or <strong>DOCX</strong> file here</p>
       </div>
 
       {loading && (
-        <div style={{ textAlign: 'center', margin: '20px 0' }}>
-          <p>Processing file...</p>
+        <div style={{ textAlign: 'center', margin: '12px 0' }}>
+          <p style={{ color: '#6b7280' }}>Processing file...</p>
         </div>
       )}
 
       {error && (
-        <div style={{ color: 'red', margin: '10px 0' }}>
+        <div style={{ color: '#b91c1c', margin: '10px 0' }}>
           <p>Error: {error}</p>
         </div>
       )}
 
       {selectedFile && (
-        <div style={{ margin: '20px 0', padding: '10px', backgroundColor: '#f0f8ff', borderRadius: '4px' }}>
-          <h3>Selected File:</h3>
-          <p><strong>Name:</strong> {selectedFile.name}</p>
-          <p><strong>Size:</strong> {formatFileSize(selectedFile.size)}</p>
-          <p><strong>Type:</strong> {selectedFile.type}</p>
+        <div style={{ margin: '12px 0', padding: '12px', backgroundColor: '#f1f5f9', borderRadius: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontWeight: 600 }}>{selectedFile.name}</div>
+              <div style={{ color: '#475569', fontSize: 13 }}>{formatFileSize(selectedFile.size)} • {selectedFile.type}</div>
+            </div>
+            <div style={{ color: '#0ea5a0', fontWeight: 600 }}>File ready</div>
+          </div>
         </div>
       )}
 
       {extractedData && (
-        <div style={{ margin: '20px 0', padding: '10px', backgroundColor: '#f0fff0', borderRadius: '4px' }}>
-          <h3>Extracted Data:</h3>
-          <p><strong>Name:</strong> {extractedData.name}</p>
-          <p><strong>Email:</strong> {extractedData.email}</p>
-          <p><strong>Phone:</strong> {extractedData.phone}</p>
+        <div style={{ margin: '12px 0', padding: '12px', backgroundColor: '#ecfccb', borderRadius: 8 }}>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>Extracted Data</div>
+          <div style={{ color: '#475569' }}><strong>Name:</strong> {extractedData.name}</div>
+          <div style={{ color: '#475569' }}><strong>Email:</strong> {extractedData.email}</div>
+          <div style={{ color: '#475569' }}><strong>Phone:</strong> {extractedData.phone}</div>
         </div>
       )}
 
       {extractedText && (
-        <div style={{ margin: '20px 0', padding: '10px', backgroundColor: '#fff5f5', borderRadius: '4px' }}>
-          <h3>Extracted Text (first 500 characters):</h3>
-          <pre style={{ whiteSpace: 'pre-wrap', fontSize: '12px' }}>
+        <div style={{ margin: '12px 0', padding: '12px', backgroundColor: '#fff7ed', borderRadius: 8 }}>
+          <div style={{ fontWeight: 600, marginBottom: 6, color: '#92400e' }}>Extracted Text (preview)</div>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 13, margin: 0, color: '#475569' }}>
             {extractedText.substring(0, 500)}
             {extractedText.length > 500 && '...'}
           </pre>
         </div>
       )}
+
     </div>
   );
+
 };
 
 export default ResumeUpload;

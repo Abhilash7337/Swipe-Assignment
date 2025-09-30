@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const app = express();
@@ -11,27 +13,31 @@ const app = express();
 app.use(helmet());
 
 // CORS - Enable before rate limiting for preflight requests
+// Configure CORS. If FRONTEND_URL is provided use it, otherwise allow reflecting origin
+const FRONTEND_URL = process.env.FRONTEND_URL;
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: FRONTEND_URL ? FRONTEND_URL : true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type']
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Rate limiting - More lenient for development
+// Rate limiting - configurable via env, defaults to lenient dev values
+const RATE_LIMIT_WINDOW_MS = process.env.RATE_LIMIT_WINDOW_MS ? parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) : 1 * 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX = process.env.RATE_LIMIT_MAX ? parseInt(process.env.RATE_LIMIT_MAX, 10) : 1000;
 const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 1000, // limit each IP to 1000 requests per minute
-  skip: (req) => {
-    // Skip rate limiting for OPTIONS requests (CORS preflight)
-    return req.method === 'OPTIONS';
-  }
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: RATE_LIMIT_MAX,
+  skip: (req) => req.method === 'OPTIONS'
 });
 app.use(limiter);
 
 // Body parser middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Body parser limits can be controlled via env (keep defaults reasonable)
+const BODY_PARSER_LIMIT = process.env.BODY_PARSER_LIMIT || '10mb';
+app.use(express.json({ limit: BODY_PARSER_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: BODY_PARSER_LIMIT }));
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI, {
@@ -64,10 +70,25 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ message: 'Route not found' });
-});
+// Serve frontend static build if available (single-server deployment)
+const FRONTEND_BUILD_PATH = process.env.FRONTEND_BUILD_PATH || path.join(__dirname, '..', 'frontend', 'dist');
+if (fs.existsSync(FRONTEND_BUILD_PATH)) {
+  console.log('✅ Serving frontend static files from', FRONTEND_BUILD_PATH);
+  app.use(express.static(FRONTEND_BUILD_PATH));
+
+  // SPA fallback: only handle non-API routes here so API routes still work
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(FRONTEND_BUILD_PATH, 'index.html'));
+  });
+} else {
+  console.warn('⚠️ Frontend build not found at', FRONTEND_BUILD_PATH, "— not serving static files. Make sure you've run the frontend build.");
+
+  // 404 handler for API / non-static setups
+  app.use('*', (req, res) => {
+    res.status(404).json({ message: 'Route not found' });
+  });
+}
 
 const PORT = process.env.PORT || 5000;
 

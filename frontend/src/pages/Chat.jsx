@@ -143,6 +143,19 @@ const Chat = () => {
     }
   }, [chatMessages]);
 
+  // Debug: log interview UI state changes to help trace resume issues
+  useEffect(() => {
+    console.debug('INTERVIEW STATE:', {
+      isAnswering,
+      isEvaluating,
+      isGeneratingQuestion,
+      currentTimer,
+      currentQuestionIndex,
+      activeQuestion,
+      chatInput
+    });
+  }, [isAnswering, isEvaluating, isGeneratingQuestion, currentTimer, currentQuestionIndex, activeQuestion, chatInput]);
+
   // Start interview process
   const startInterview = async () => {
     try {
@@ -169,7 +182,7 @@ const Chat = () => {
 
       // Generate and show first question
       setTimeout(() => {
-        generateAndShowNextQuestion();
+        generateAndShowNextQuestion(0);
       }, 3000);
     } catch (error) {
       console.error('Failed to start interview:', error);
@@ -177,13 +190,16 @@ const Chat = () => {
   };
 
   // Generate and show the next question
-  const generateAndShowNextQuestion = async () => {
+  // Generate and show the next question. Accept an explicit index to avoid stale state.
+  const generateAndShowNextQuestion = async (explicitIndex = null) => {
     try {
+      const idx = explicitIndex !== null ? explicitIndex : currentQuestionIndex;
+      console.debug('generateAndShowNextQuestion: using idx=', idx, 'currentQuestionIndex=', currentQuestionIndex);
       setIsGeneratingQuestion(true);
 
-      const questionNumber = currentQuestionIndex + 1;
-      const difficulty = difficultySequence[currentQuestionIndex];
-      const timeLimit = timeSequence[currentQuestionIndex];
+      const questionNumber = idx + 1;
+      const difficulty = difficultySequence[idx];
+      const timeLimit = timeSequence[idx];
 
       // Show generating message
       const generatingMessage = {
@@ -212,8 +228,8 @@ const Chat = () => {
         feedback: null
       };
 
-      setActiveQuestion(newQuestion);
-      setAllQuestionsAsked(prev => [...prev, questionText]);
+  setActiveQuestion(newQuestion);
+  setAllQuestionsAsked(prev => [...prev, questionText]);
 
       // Send question to backend immediately
       if (interviewId) {
@@ -238,6 +254,11 @@ const Chat = () => {
       setIsAnswering(true);
       setQuestionStartTime(Date.now());
       setIsGeneratingQuestion(false);
+
+      // If caller provided explicit index, ensure currentQuestionIndex is in sync
+      if (explicitIndex !== null && explicitIndex !== currentQuestionIndex) {
+        setCurrentQuestionIndex(explicitIndex);
+      }
 
     } catch (error) {
       console.error('Failed to generate question:', error);
@@ -390,9 +411,11 @@ const Chat = () => {
         
         // Move to next question or finish interview
         if (currentQuestionIndex < 5) {
-          setCurrentQuestionIndex(prev => prev + 1);
+          const nextIndex = currentQuestionIndex + 1;
+          // keep state in sync and pass explicit index to avoid stale closures
+          setCurrentQuestionIndex(nextIndex);
           setTimeout(() => {
-            generateAndShowNextQuestion();
+            generateAndShowNextQuestion(nextIndex);
           }, 2000);
         } else {
           setTimeout(() => {
@@ -609,8 +632,9 @@ const Chat = () => {
       }
     });
 
-    // Set chat messages
-    setChatMessages(restoredMessages);
+  // Set chat messages
+  console.debug('restoreInterviewState: setting restoredMessages, answeredCount=', answeredCount, 'questions:', questions);
+  setChatMessages(restoredMessages);
     
     // Restore progress
     setAllQuestionsAsked(answeredQuestions.map(q => q.question));
@@ -631,6 +655,7 @@ const Chat = () => {
       
       // Add the next question message
       setTimeout(() => {
+        console.debug('restoreInterviewState: pushing next unanswered question message, nextQuestionIndex=', nextQuestionIndex, 'nextUnanswered=', nextUnanswered);
         setChatMessages(prev => [...prev, {
           id: generateMessageId(),
           type: 'bot',
@@ -972,47 +997,75 @@ Are you ready to start your technical interview? Type "yes", "start", or "ready"
           {/* Step 0: Resume Upload + Email + Continue Option */}
           {currentStep === 0 && (
             <div>
-              <Card style={{ marginBottom: 16 }}>
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  <Input
-                    placeholder="Enter your email to check for unfinished interview"
-                    value={resumeEmail}
-                    onChange={(e) => setResumeEmail(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter' && resumeEmail.trim()) {
-                        handleResumeEmailCheck();
-                      }
-                    }}
-                    style={{ width: '100%' }}
-                  />
-                  <Button 
-                    type="primary" 
-                    onClick={handleResumeEmailCheck}
-                    disabled={!resumeEmail.trim() || !resumeEmail.includes('@')}
-                  >
-                    Check for Unfinished Interview
-                  </Button>
-                </Space>
-              </Card>
-              {showContinuePrompt && pendingInterview && (
-                <div style={{ marginBottom: 16 }}>
-                  <Tag color="orange">Unfinished interview found for {resumeEmail}</Tag>
-                  <Button type="primary" onClick={() => {
-                    setCurrentStep(1);
-                    setChatPhase('interview');
-                    setIsInterviewStarted(true);
-                    restoreInterviewState(pendingInterview);
-                  }}>Continue Previous Interview</Button>
-                </div>
-              )}
               <ResumeUploadSection
                 onFileSelect={handleFileSelect}
                 onTextExtracted={handleTextExtracted}
               />
+
+              <Card bordered={false} style={{ marginBottom: 16, borderRadius: 12, boxShadow: '0 6px 18px rgba(15,23,42,0.04)', padding: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center' }}>
+                  <div style={{ flex: 1 }}>
+                    <Title level={4} style={{ margin: 0 }}>Unfinished Interview</Title>
+                    <Text type="secondary">Enter your email to check if you have a saved interview you can continue.</Text>
+
+                    <div style={{ marginTop: 12 }}>
+                      <Input
+                        placeholder="Enter your email to check for unfinished interview"
+                        value={resumeEmail}
+                        onChange={(e) => setResumeEmail(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter' && resumeEmail.trim()) {
+                            handleResumeEmailCheck();
+                          }
+                        }}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ width: 220, textAlign: 'right' }}>
+                    <Button 
+                      type="primary" 
+                      onClick={handleResumeEmailCheck}
+                      disabled={!resumeEmail.trim() || !resumeEmail.includes('@')}
+                      style={{ width: '100%', borderRadius: 8 }}
+                    >
+                      Check
+                    </Button>
+                    <div style={{ marginTop: 8 }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>We only use your email to locate your saved interview.</Text>
+                    </div>
+                  </div>
+                </div>
+                {showContinuePrompt && pendingInterview && (
+                  <div style={{ marginTop: 16, borderTop: '1px solid rgba(15,23,42,0.03)', paddingTop: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                        <Tag color="orange" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          Unfinished interview found for {resumeEmail}
+                        </Tag>
+                        <div style={{ color: '#6b7280', fontSize: 13 }}>You can resume where you left off.</div>
+                      </div>
+
+                      <div style={{ marginLeft: 'auto' }}>
+                        <Button type="primary" onClick={() => {
+                          setCurrentStep(1);
+                          setChatPhase('interview');
+                          setIsInterviewStarted(true);
+                          restoreInterviewState(pendingInterview);
+                        }} style={{ borderRadius: 8, boxShadow: '0 6px 12px rgba(16,24,40,0.04)' }}>
+                          Continue Previous Interview
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+              </Card>
             </div>
           )}
 
-          {/* Step 1: Chat Interface for Data Collection */}
+          {/* Chat Interface for Data Collection */}
           {currentStep === 1 && !isInterviewStarted && (
             <DataCollectionChat
               ref={chatContainerRef}
