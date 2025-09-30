@@ -3,6 +3,9 @@
 # Swipe Application EC2 Deployment Script
 echo "🚀 Starting Swipe Application Deployment..."
 
+# Set Node.js memory options for build
+export NODE_OPTIONS="--max-old-space-size=4096"
+
 # Update system packages
 echo "📦 Updating system packages..."
 sudo apt update && sudo apt upgrade -y

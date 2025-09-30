@@ -15,5 +15,40 @@ export default defineConfig({
     fs: {
       allow: ['..']
     }
+  },
+  define: {
+    global: 'globalThis',
+  },
+  resolve: {
+    alias: {
+      // Handle Node.js modules for browser compatibility
+      'fs': false,
+      'path': false,
+      'stream': false,
+    }
+  },
+  build: {
+    // Increase memory allocation for build
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      external: ['fs', 'path', 'stream'],
+      output: {
+        manualChunks: {
+          // Split vendor libraries into separate chunks
+          vendor: ['react', 'react-dom'],
+          antd: ['antd'],
+          redux: ['@reduxjs/toolkit', 'react-redux', 'redux-persist'],
+          pdf: ['pdfjs-dist'],
+          utils: ['axios', 'mammoth']
+        }
+      }
+    },
+    // Use esbuild instead of terser for faster builds
+    minify: 'esbuild',
+    target: 'esnext',
+    // Optimize build performance
+    sourcemap: false,
+    // Reduce bundle size
+    cssCodeSplit: true,
   }
 })
