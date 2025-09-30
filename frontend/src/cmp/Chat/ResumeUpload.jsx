@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { Card, Button } from 'antd';
+import { FileTextOutlined, UploadOutlined } from '@ant-design/icons';
 import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
 
@@ -143,43 +145,108 @@ const ResumeUpload = ({ onFileSelect, onTextExtracted }) => {
   };
 
   return (
-    <div style={{ padding: '20px', border: '2px dashed #ccc', borderRadius: '8px' }}>
+    <Card
+      style={{
+        background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+        border: '1px solid #e2e8f0',
+        borderRadius: 16,
+        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02)',
+        padding: '32px 40px',
+        maxWidth: 600,
+        margin: '0 auto 32px auto',
+        textAlign: 'center'
+      }}
+      bordered={false}
+    >
+      {/* Heading */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 12,
+          marginBottom: 12
+        }}>
+          <FileTextOutlined style={{
+            fontSize: 32,
+            color: '#10b981',
+            background: '#ecfdf5',
+            padding: 8,
+            borderRadius: 12
+          }} />
+          <h2 style={{
+            fontWeight: 700,
+            fontSize: '26px',
+            color: '#1e293b',
+            margin: 0,
+            letterSpacing: '-0.5px'
+          }}>
+            Step 1: Upload Your Resume
+          </h2>
+        </div>
+        <p style={{
+          color: '#64748b',
+          fontSize: '16px',
+          margin: 0,
+          lineHeight: 1.6
+        }}>
+          Choose a PDF or DOCX file, or drag and drop it below. We'll extract your info automatically!
+        </p>
+      </div>
+
+      {/* Upload Area */}
       <div
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         style={{
-          padding: '20px',
+          padding: '32px 20px',
           textAlign: 'center',
-          backgroundColor: '#f9f9f9',
-          borderRadius: '4px',
-          marginBottom: '20px'
+          background: '#f9fafb',
+          border: '2px dashed #a7f3d0',
+          borderRadius: 12,
+          marginBottom: '24px',
+          transition: 'border-color 0.2s',
+          cursor: 'pointer'
         }}
       >
         <input
           type="file"
           accept=".pdf,.docx"
           onChange={handleFileChange}
-          style={{ marginBottom: '10px' }}
+          style={{
+            marginBottom: '16px',
+            fontSize: '15px',
+            borderRadius: 8,
+            border: '1px solid #e2e8f0',
+            padding: '8px 12px',
+            background: '#fff',
+            boxShadow: '0 1px 4px rgba(16,185,129,0.04)'
+          }}
         />
-        <p>Or drag and drop a PDF or DOCX file here</p>
+        <div style={{ color: '#10b981', fontWeight: 500, fontSize: '15px', marginBottom: 8 }}>
+          <UploadOutlined style={{ marginRight: 6 }} />
+          Or drag and drop a PDF or DOCX file here
+        </div>
+        <div style={{ color: '#94a3b8', fontSize: '13px' }}>
+          Max file size: 5MB
+        </div>
       </div>
 
       {loading && (
-        <div style={{ textAlign: 'center', margin: '20px 0' }}>
+        <div style={{ textAlign: 'center', margin: '20px 0', color: '#2563eb', fontWeight: 500 }}>
           <p>Processing file...</p>
         </div>
       )}
 
       {error && (
-        <div style={{ color: 'red', margin: '10px 0' }}>
+        <div style={{ color: '#ef4444', margin: '10px 0', fontWeight: 500 }}>
           <p>Error: {error}</p>
         </div>
       )}
 
       {selectedFile && (
-        <div style={{ margin: '20px 0', padding: '10px', backgroundColor: '#f0f8ff', borderRadius: '4px' }}>
-          <h3>Selected File:</h3>
+        <div style={{ margin: '20px 0', padding: '14px', background: '#e0f2fe', borderRadius: '8px', textAlign: 'left' }}>
+          <h3 style={{ color: '#2563eb', marginBottom: 8 }}>Selected File:</h3>
           <p><strong>Name:</strong> {selectedFile.name}</p>
           <p><strong>Size:</strong> {formatFileSize(selectedFile.size)}</p>
           <p><strong>Type:</strong> {selectedFile.type}</p>
@@ -187,8 +254,8 @@ const ResumeUpload = ({ onFileSelect, onTextExtracted }) => {
       )}
 
       {extractedData && (
-        <div style={{ margin: '20px 0', padding: '10px', backgroundColor: '#f0fff0', borderRadius: '4px' }}>
-          <h3>Extracted Data:</h3>
+        <div style={{ margin: '20px 0', padding: '14px', background: '#f0fff0', borderRadius: '8px', textAlign: 'left' }}>
+          <h3 style={{ color: '#10b981', marginBottom: 8 }}>Extracted Data:</h3>
           <p><strong>Name:</strong> {extractedData.name}</p>
           <p><strong>Email:</strong> {extractedData.email}</p>
           <p><strong>Phone:</strong> {extractedData.phone}</p>
@@ -196,15 +263,15 @@ const ResumeUpload = ({ onFileSelect, onTextExtracted }) => {
       )}
 
       {extractedText && (
-        <div style={{ margin: '20px 0', padding: '10px', backgroundColor: '#fff5f5', borderRadius: '4px' }}>
-          <h3>Extracted Text (first 500 characters):</h3>
-          <pre style={{ whiteSpace: 'pre-wrap', fontSize: '12px' }}>
+        <div style={{ margin: '20px 0', padding: '14px', background: '#fff5f5', borderRadius: '8px', textAlign: 'left' }}>
+          <h3 style={{ color: '#f59e42', marginBottom: 8 }}>Extracted Text (first 500 characters):</h3>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: '13px', margin: 0 }}>
             {extractedText.substring(0, 500)}
             {extractedText.length > 500 && '...'}
           </pre>
         </div>
       )}
-    </div>
+    </Card>
   );
 };
 
