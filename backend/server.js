@@ -49,10 +49,10 @@ app.use(express.urlencoded({ extended: true, limit: BODY_PARSER_LIMIT }));
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
-  useUnifiedTopology: true,
+  useUnifiedTopology: true
 })
-.then(() => console.log('✅ MongoDB connected successfully'))
-.catch(err => console.error('❌ MongoDB connection error:', err));
+  .then(() => {/* MongoDB connected */})
+  .catch(() => {/* MongoDB connection error */});
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
@@ -81,6 +81,7 @@ app.use((err, req, res, next) => {
 const FRONTEND_BUILD_PATH = process.env.FRONTEND_BUILD_PATH || path.join(__dirname, '..', 'frontend', 'dist');
 if (fs.existsSync(FRONTEND_BUILD_PATH)) {
   console.log('✅ Serving frontend static files from', FRONTEND_BUILD_PATH);
+
   app.use(express.static(FRONTEND_BUILD_PATH));
 
   // SPA fallback: only handle non-API routes here so API routes still work
@@ -101,4 +102,5 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
+
 });

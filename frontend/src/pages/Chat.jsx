@@ -79,7 +79,7 @@ const Chat = () => {
     candidateInfo: extractedData?.data,
     resumeText: extractedData?.text,
     onInterviewComplete: (results) => {
-      console.log('Interview completed:', results);
+
     }
   });
 
@@ -99,11 +99,11 @@ const Chat = () => {
         phone: finalPhone.trim()
       };
 
-      console.log('💾 Saving user to backend:', userData);
+
       const result = await apiService.saveUser(userData);
       
       if (result.success) {
-        console.log(`✅ User ${result.action} in backend:`, result.user.email);
+
         // Store token if provided (for new registrations)
         if (result.token) {
           apiService.setToken(result.token);
@@ -376,7 +376,7 @@ const Chat = () => {
         try {
           const result = await apiService.updateInterviewQuestion(interviewId, answerData);
           if (result.success) {
-            console.log('✅ Answer saved to database:', answerData);
+
           } else {
             console.error('❌ Failed to save answer to database:', result);
             // Show error message to user
@@ -480,7 +480,7 @@ const Chat = () => {
 
   // Handle file selection
   const handleFileSelect = (file) => {
-    console.log('📁 File selected:', file);
+
     setSelectedFile(file);
   };
 
@@ -543,7 +543,7 @@ const Chat = () => {
 
   // Handle text extraction success and start chatbot conversation
   const handleTextExtracted = async (result) => {
-    console.log('🎯 Text Extraction Result:', result);
+
     setProcessingNewResume(true);
     
     if (result.success) {
@@ -571,13 +571,13 @@ const Chat = () => {
       }
 
       // Switch to chat interface for data collection
-      console.log('🔄 Setting currentStep to 1');
+
       setCurrentStep(1);
       setChatPhase('collecting');
       // Start chatbot conversation
-      console.log('⏰ Starting timeout for chatbot conversation');
+
       setTimeout(() => {
-        console.log('🤖 Starting chatbot conversation');
+
         startChatbotConversation(data);
       }, 1000);
     } else {
@@ -678,7 +678,7 @@ const Chat = () => {
 
   // Start chatbot conversation after resume upload
   const startChatbotConversation = async (data) => {
-    console.log('🤖 startChatbotConversation called with data:', data);
+
     setBotIsTyping(true);
     
     // Welcome message
@@ -688,11 +688,11 @@ const Chat = () => {
       message: `Hello! 👋 I've successfully processed your resume. Let me review the information I found...`
     };
     
-    console.log('📨 Setting welcome message:', welcomeMessage);
+
     setChatMessages([welcomeMessage]);
     
     setTimeout(() => {
-      console.log('⏳ Timeout completed, calling checkMissingInformation');
+
       checkMissingInformation(data);
     }, 2000);
   };
@@ -733,7 +733,7 @@ const Chat = () => {
       setMissingFields(missing);
 
     setTimeout(() => {
-      console.log('🔄 In setTimeout, missing.length:', missing.length, 'missing:', missing);
+
       if (missing.length > 0) {
         // Ask for missing/invalid information via chat
         const missingMessage = {
@@ -745,12 +745,12 @@ const Chat = () => {
         setBotIsTyping(false);
         setCurrentMissingFieldIndex(0);
         setTimeout(() => {
-          console.log('🎯 About to call askForNextMissingField(0)');
+
           askForNextMissingField(0, missing);
         }, 2000);
       } else {
         // All information complete, ask to start interview
-        console.log('✅ All fields valid, calling askToStartInterview');
+
         askToStartInterview(data);
       }
     }, 1500);
@@ -758,11 +758,11 @@ const Chat = () => {
 
   // Ask for the next missing field
   const askForNextMissingField = (fieldIndex, missingFieldsArray = missingFields, currentUserInputs = userInputs) => {
-    console.log('🎯 askForNextMissingField called with fieldIndex:', fieldIndex, 'missingFieldsArray:', missingFieldsArray, 'currentUserInputs:', currentUserInputs);
+
     
     if (fieldIndex >= missingFieldsArray.length) {
       // All fields collected, ask to start interview with current user inputs
-      console.log('🔄 All fields collected. currentUserInputs:', currentUserInputs, 'extractedData:', extractedData);
+
       askToStartInterview(extractedData, currentUserInputs);
       return;
     }
@@ -796,13 +796,7 @@ const Chat = () => {
     const finalPhone = currentUserInputs.phone?.trim() || extractedData?.data?.phone || 'Not provided';
     
     // Debug log to see what values we're using
-    console.log('🎯 Final summary values:', { 
-      currentUserInputs, 
-      extractedData: extractedData?.data, 
-      finalName, 
-      finalEmail, 
-      finalPhone 
-    });
+
 
     // Save user data to backend
     await saveUserToBackend(finalName, finalEmail, finalPhone);
@@ -848,7 +842,7 @@ Are you ready to start your technical interview? Type "yes", "start", or "ready"
     setWaitingForUserResponse(false);
     
     if (chatPhase === 'collecting' && currentMissingField) {
-      console.log('🔍 Processing missing field input. chatPhase:', chatPhase, 'currentMissingField:', currentMissingField, 'currentInput:', currentInput);
+
       
       // Handle missing field response and update userInputs immediately
       const updatedUserInputs = {
@@ -857,7 +851,7 @@ Are you ready to start your technical interview? Type "yes", "start", or "ready"
       };
       
       setUserInputs(updatedUserInputs);
-      console.log('🔄 Updated userInputs:', updatedUserInputs);
+      
       
       // Also immediately update extractedData to ensure it's in sync
       const updatedExtractedData = {
@@ -868,7 +862,7 @@ Are you ready to start your technical interview? Type "yes", "start", or "ready"
         }
       };
       setExtractedData(updatedExtractedData);
-      console.log('🔄 Updated extractedData:', updatedExtractedData);
+     
       
       setBotIsTyping(true);
       

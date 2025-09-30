@@ -182,7 +182,7 @@ const InterviewEngine = ({ candidateInfo, resumeText, onInterviewComplete, onQue
           
           // If HuggingFace is available, try it as fallback
           if (aiServices.hasHuggingFace) {
-            console.log('Falling back to HuggingFace...');
+
             return await judgeAnswerWithHuggingFace(question, answer, difficulty, timeTaken);
           }
           throw geminiError;
@@ -234,7 +234,7 @@ const InterviewEngine = ({ candidateInfo, resumeText, onInterviewComplete, onQue
     };
 
     try {
-      console.log('Sending request to Gemini for evaluation...');
+
       
       // Add delay to prevent rate limiting (1 second between requests)
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -254,7 +254,7 @@ const InterviewEngine = ({ candidateInfo, resumeText, onInterviewComplete, onQue
       }
 
       const aiResponse = response.data.candidates[0].content.parts[0].text;
-      console.log('Gemini Evaluation Response:', aiResponse);
+
       
       let cleanResponse = aiResponse.trim();
       
@@ -282,7 +282,7 @@ const InterviewEngine = ({ candidateInfo, resumeText, onInterviewComplete, onQue
           feedback: feedbackMatch ? feedbackMatch[1] : "Evaluation completed"
         };
         
-        console.log('Extracted values from partial JSON:', evaluation);
+
       }
       
       // Validate AI response
@@ -305,7 +305,7 @@ const InterviewEngine = ({ candidateInfo, resumeText, onInterviewComplete, onQue
       
       // Handle rate limiting with retry
       if (error.response?.status === 429) {
-        console.log('Rate limit hit, waiting 10 seconds before retry...');
+
         await new Promise(resolve => setTimeout(resolve, 10000));
         
         // Try one more time after waiting
@@ -322,7 +322,7 @@ const InterviewEngine = ({ candidateInfo, resumeText, onInterviewComplete, onQue
           
           if (retryResponse.data && retryResponse.data.candidates && retryResponse.data.candidates[0]) {
             const retryAiResponse = retryResponse.data.candidates[0].content.parts[0].text;
-            console.log('Retry successful:', retryAiResponse);
+
             
             // Use same parsing logic as before
             let cleanResponse = retryAiResponse.trim();

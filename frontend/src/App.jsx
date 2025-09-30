@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Tabs } from "antd";
 import Chat from "./pages/Chat";
 import Dash from "./pages/Dash";
-import ApiTest from "./pages/ApiTest";
+
 
 const App = () => {
   const [activeTab, setActiveTab] = useState("chat");

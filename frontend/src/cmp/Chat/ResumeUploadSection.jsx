@@ -6,7 +6,7 @@ const { Title, Text } = Typography;
 
 const ResumeUploadSection = ({ onFileSelect, onTextExtracted }) => (
   <Card
-    bordered={false}
+    variant={false}
     style={{ marginBottom: '20px', boxShadow: '0 6px 18px rgba(15,23,42,0.08)', borderRadius: 12 }}
   >
     <Row gutter={24} align="middle">
