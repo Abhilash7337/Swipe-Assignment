@@ -4,7 +4,7 @@ const User = require('../models/User');
 
 const router = express.Router();
 
-// @route   GET /api/users/profile
+// @route   GET /users/profile
 // @desc    Get user profile
 // @access  Private
 router.get('/profile', async (req, res) => {
@@ -29,7 +29,7 @@ router.get('/profile', async (req, res) => {
   }
 });
 
-// @route   PUT /api/users/profile
+// @route   PUT /users/profile
 // @desc    Update user profile
 // @access  Private
 router.put('/profile', async (req, res) => {
@@ -64,7 +64,7 @@ router.put('/profile', async (req, res) => {
   }
 });
 
-// @route   POST /api/users/save
+// @route   POST /users/save
 // @desc    Save or update user data
 // @access  Public
 router.post('/save', async (req, res) => {
@@ -120,7 +120,7 @@ router.post('/save', async (req, res) => {
   }
 });
 
-// @route   GET /api/users/by-email/:email
+// @route   GET /users/by-email/:email
 // @desc    Get user by email
 // @access  Public
 router.get('/by-email/:email', async (req, res) => {

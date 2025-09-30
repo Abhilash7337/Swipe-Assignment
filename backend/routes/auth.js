@@ -3,7 +3,7 @@ const User = require('../models/User');
 
 const router = express.Router();
 
-// @route   POST /api/auth/register
+// @route   POST /auth/register
 // @desc    Register user
 // @access  Public
 router.post('/register', async (req, res) => {
@@ -45,7 +45,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// @route   POST /api/auth/login
+// @route   POST /auth/login
 // @desc    Login user by email
 // @access  Public
 router.post('/login', async (req, res) => {

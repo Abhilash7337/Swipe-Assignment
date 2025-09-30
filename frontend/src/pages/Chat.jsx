@@ -5,6 +5,8 @@ import { FileTextOutlined, MessageOutlined, ClockCircleOutlined, SendOutlined } 
 import ResumeUploadSection from "../cmp/Chat/ResumeUploadSection";
 import DataCollectionChat from "../cmp/Chat/DataCollectionChat";
 import InterviewChat from "../cmp/Chat/InterviewChat";
+import ResumePrompt from "../cmp/Chat/ResumePrompt";
+import InterviewArea from "../cmp/Chat/InterviewArea";
 import InterviewResultsContainer from "../cmp/Chat/InterviewResultsContainer";
 import InterviewEngine from "../cmp/Chat/InterviewEngine";
 import { setCandidateInfo } from "../feat/cand";
@@ -79,7 +81,7 @@ const Chat = () => {
     candidateInfo: extractedData?.data,
     resumeText: extractedData?.text,
     onInterviewComplete: (results) => {
-      console.log('Interview completed:', results);
+      // interview completion handled by callbacks — debug logs removed
     }
   });
 
@@ -99,11 +101,11 @@ const Chat = () => {
         phone: finalPhone.trim()
       };
 
-      console.log('💾 Saving user to backend:', userData);
+  // Saving user to backend
       const result = await apiService.saveUser(userData);
       
       if (result.success) {
-        console.log(`✅ User ${result.action} in backend:`, result.user.email);
+  // User saved/updated in backend
         // Store token if provided (for new registrations)
         if (result.token) {
           apiService.setToken(result.token);
@@ -355,7 +357,7 @@ const Chat = () => {
         try {
           const result = await apiService.updateInterviewQuestion(interviewId, answerData);
           if (result.success) {
-            console.log('✅ Answer saved to database:', answerData);
+            // Answer saved to database
           } else {
             console.error('❌ Failed to save answer to database:', result);
             // Show error message to user
@@ -457,7 +459,7 @@ const Chat = () => {
 
   // Handle file selection
   const handleFileSelect = (file) => {
-    console.log('📁 File selected:', file);
+    // File selected
     setSelectedFile(file);
   };
 
@@ -520,7 +522,7 @@ const Chat = () => {
 
   // Handle text extraction success and start chatbot conversation
   const handleTextExtracted = async (result) => {
-    console.log('🎯 Text Extraction Result:', result);
+    // Text extraction result processed
     setProcessingNewResume(true);
     
     if (result.success) {
@@ -548,13 +550,13 @@ const Chat = () => {
       }
 
       // Switch to chat interface for data collection
-      console.log('🔄 Setting currentStep to 1');
+      // advancing to step 1
       setCurrentStep(1);
       setChatPhase('collecting');
       // Start chatbot conversation
-      console.log('⏰ Starting timeout for chatbot conversation');
+      // Starting timeout for chatbot conversation
       setTimeout(() => {
-        console.log('🤖 Starting chatbot conversation');
+        // Starting chatbot conversation
         startChatbotConversation(data);
       }, 1000);
     } else {
@@ -653,7 +655,7 @@ const Chat = () => {
 
   // Start chatbot conversation after resume upload
   const startChatbotConversation = async (data) => {
-    console.log('🤖 startChatbotConversation called with data:', data);
+  // startChatbotConversation invoked
     setBotIsTyping(true);
     
     // Welcome message
@@ -663,11 +665,11 @@ const Chat = () => {
       message: `Hello! 👋 I've successfully processed your resume. Let me review the information I found...`
     };
     
-    console.log('📨 Setting welcome message:', welcomeMessage);
-    setChatMessages([welcomeMessage]);
+  // Setting welcome message
+  setChatMessages([welcomeMessage]);
     
     setTimeout(() => {
-      console.log('⏳ Timeout completed, calling checkMissingInformation');
+      // Timeout completed, checking missing information
       checkMissingInformation(data);
     }, 2000);
   };
@@ -708,7 +710,7 @@ const Chat = () => {
       setMissingFields(missing);
 
     setTimeout(() => {
-      console.log('🔄 In setTimeout, missing.length:', missing.length, 'missing:', missing);
+      // Missing fields length handled internally
       if (missing.length > 0) {
         // Ask for missing/invalid information via chat
         const missingMessage = {
@@ -720,12 +722,11 @@ const Chat = () => {
         setBotIsTyping(false);
         setCurrentMissingFieldIndex(0);
         setTimeout(() => {
-          console.log('🎯 About to call askForNextMissingField(0)');
+          // calling askForNextMissingField
           askForNextMissingField(0, missing);
         }, 2000);
       } else {
         // All information complete, ask to start interview
-        console.log('✅ All fields valid, calling askToStartInterview');
         askToStartInterview(data);
       }
     }, 1500);
@@ -733,11 +734,11 @@ const Chat = () => {
 
   // Ask for the next missing field
   const askForNextMissingField = (fieldIndex, missingFieldsArray = missingFields, currentUserInputs = userInputs) => {
-    console.log('🎯 askForNextMissingField called with fieldIndex:', fieldIndex, 'missingFieldsArray:', missingFieldsArray, 'currentUserInputs:', currentUserInputs);
+    // askForNextMissingField invoked
     
     if (fieldIndex >= missingFieldsArray.length) {
       // All fields collected, ask to start interview with current user inputs
-      console.log('🔄 All fields collected. currentUserInputs:', currentUserInputs, 'extractedData:', extractedData);
+      // All fields collected
       askToStartInterview(extractedData, currentUserInputs);
       return;
     }
@@ -771,13 +772,7 @@ const Chat = () => {
     const finalPhone = currentUserInputs.phone?.trim() || extractedData?.data?.phone || 'Not provided';
     
     // Debug log to see what values we're using
-    console.log('🎯 Final summary values:', { 
-      currentUserInputs, 
-      extractedData: extractedData?.data, 
-      finalName, 
-      finalEmail, 
-      finalPhone 
-    });
+    // Final summary values prepared
 
     // Save user data to backend
     await saveUserToBackend(finalName, finalEmail, finalPhone);
@@ -823,7 +818,7 @@ Are you ready to start your technical interview? Type "yes", "start", or "ready"
     setWaitingForUserResponse(false);
     
     if (chatPhase === 'collecting' && currentMissingField) {
-      console.log('🔍 Processing missing field input. chatPhase:', chatPhase, 'currentMissingField:', currentMissingField, 'currentInput:', currentInput);
+  // Processing missing field input
       
       // Handle missing field response and update userInputs immediately
       const updatedUserInputs = {
@@ -832,7 +827,7 @@ Are you ready to start your technical interview? Type "yes", "start", or "ready"
       };
       
       setUserInputs(updatedUserInputs);
-      console.log('🔄 Updated userInputs:', updatedUserInputs);
+  // Updated userInputs
       
       // Also immediately update extractedData to ensure it's in sync
       const updatedExtractedData = {
@@ -843,7 +838,7 @@ Are you ready to start your technical interview? Type "yes", "start", or "ready"
         }
       };
       setExtractedData(updatedExtractedData);
-      console.log('🔄 Updated extractedData:', updatedExtractedData);
+  // Updated extractedData
       
       setBotIsTyping(true);
       
@@ -969,80 +964,42 @@ Are you ready to start your technical interview? Type "yes", "start", or "ready"
       {/* Show interview interface only when not completed */}
       {!isInterviewCompleted && (
         <>
-          {/* Step 0: Resume Upload + Email + Continue Option */}
+          {/* Step 0: Resume upload and check */}
           {currentStep === 0 && (
-            <div>
-              <Card style={{ marginBottom: 16 }}>
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  <Input
-                    placeholder="Enter your email to check for unfinished interview"
-                    value={resumeEmail}
-                    onChange={(e) => setResumeEmail(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter' && resumeEmail.trim()) {
-                        handleResumeEmailCheck();
-                      }
-                    }}
-                    style={{ width: '100%' }}
-                  />
-                  <Button 
-                    type="primary" 
-                    onClick={handleResumeEmailCheck}
-                    disabled={!resumeEmail.trim() || !resumeEmail.includes('@')}
-                  >
-                    Check for Unfinished Interview
-                  </Button>
-                </Space>
-              </Card>
-              {showContinuePrompt && pendingInterview && (
-                <div style={{ marginBottom: 16 }}>
-                  <Tag color="orange">Unfinished interview found for {resumeEmail}</Tag>
-                  <Button type="primary" onClick={() => {
-                    setCurrentStep(1);
-                    setChatPhase('interview');
-                    setIsInterviewStarted(true);
-                    restoreInterviewState(pendingInterview);
-                  }}>Continue Previous Interview</Button>
-                </div>
-              )}
-              <ResumeUploadSection
-                onFileSelect={handleFileSelect}
-                onTextExtracted={handleTextExtracted}
-              />
-            </div>
-          )}
-
-          {/* Step 1: Chat Interface for Data Collection */}
-          {currentStep === 1 && !isInterviewStarted && (
-            <DataCollectionChat
-              ref={chatContainerRef}
-              chatMessages={chatMessages}
-              botIsTyping={botIsTyping}
-              chatInput={chatInput}
-              setChatInput={setChatInput}
-              handleChatInput={handleChatInput}
-              waitingForUserResponse={waitingForUserResponse}
-              chatPhase={chatPhase}
-              currentMissingField={currentMissingField}
+            <ResumePrompt
+              resumeEmail={resumeEmail}
+              onResumeEmailChange={handleResumeEmailChange}
+              onCheck={handleResumeEmailCheck}
+              showContinuePrompt={showContinuePrompt}
+              pendingInterview={pendingInterview}
+              onContinue={() => handleContinueInterview()}
+              onFileSelect={handleFileSelect}
+              onTextExtracted={handleTextExtracted}
             />
           )}
 
-          {/* Interview Interface */}
-          {isInterviewStarted && (
-            <InterviewChat
-              ref={chatContainerRef}
-              isAnswering={isAnswering}
-              currentTimer={currentTimer}
-              currentQuestionIndex={currentQuestionIndex}
-              chatMessages={chatMessages}
-              isGeneratingQuestion={isGeneratingQuestion}
-              isEvaluating={isEvaluating}
-              chatInput={chatInput}
-              setChatInput={setChatInput}
-              submitAnswer={submitAnswer}
-              activeQuestion={activeQuestion}
-            />
-          )}
+          {/* Interview area (data collection or live interview) */}
+          <InterviewArea
+            currentStep={currentStep}
+            isInterviewStarted={isInterviewStarted}
+            isInterviewCompleted={isInterviewCompleted}
+            chatContainerRef={chatContainerRef}
+            chatMessages={chatMessages}
+            botIsTyping={botIsTyping}
+            chatInput={chatInput}
+            setChatInput={setChatInput}
+            handleChatInput={handleChatInput}
+            waitingForUserResponse={waitingForUserResponse}
+            chatPhase={chatPhase}
+            currentMissingField={currentMissingField}
+            isAnswering={isAnswering}
+            currentTimer={currentTimer}
+            currentQuestionIndex={currentQuestionIndex}
+            isGeneratingQuestion={isGeneratingQuestion}
+            isEvaluating={isEvaluating}
+            submitAnswer={submitAnswer}
+            activeQuestion={activeQuestion}
+          />
         </>
       )}
     </div>

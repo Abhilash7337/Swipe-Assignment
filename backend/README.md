@@ -62,34 +62,34 @@ npm run dev
 npm start
 ```
 
-The server will start on `http://localhost:5000`
+The server will start on `http://localhost:3001`
 
 ## API Endpoints
 
 ### Authentication
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - Login user by email
-- `GET /api/auth/me` - Get current user (protected)
-- `POST /api/auth/verify-token` - Verify JWT token
+- `POST /auth/register` - Register new user
+- `POST /auth/login` - Login user by email
+- `GET /auth/me` - Get current user (protected)
+- `POST /auth/verify-token` - Verify JWT token
 
 ### Users
-- `POST /api/users/save` - Save/update user data
-- `GET /api/users/by-email/:email` - Get user by email
-- `PUT /api/users/profile` - Update profile (protected)
+- `POST /users/save` - Save/update user data
+- `GET /users/by-email/:email` - Get user by email
+- `PUT /users/profile` - Update profile (protected)
 
 ### Sessions
-- `POST /api/sessions/save` - Save session data
-- `GET /api/sessions/get/:email` - Get session by email
-- `DELETE /api/sessions/delete/:email` - Delete session
+- `POST /sessions/save` - Save session data
+- `GET /sessions/get/:email` - Get session by email
+- `DELETE /sessions/delete/:email` - Delete session
 
 ### Interviews
-- `POST /api/interviews/create` - Create interview
-- `PUT /api/interviews/:id/question` - Add/update question
-- `PUT /api/interviews/:id/complete` - Complete interview
-- `GET /api/interviews/user/:email` - Get user interviews
+- `POST /interviews/create` - Create interview
+- `PUT /interviews/:id/question` - Add/update question
+- `PUT /interviews/:id/complete` - Complete interview
+- `GET /interviews/user/:email` - Get user interviews
 
 ### Health Check
-- `GET /api/health` - Server health status
+- `GET /health` - Server health status
 
 ## Features
 

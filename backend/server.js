@@ -6,6 +6,8 @@ const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 const app = express();
+const path = require('path');
+const fs = require('fs');
 
 // Security middleware
 app.use(helmet());
@@ -41,13 +43,13 @@ mongoose.connect(process.env.MONGODB_URI, {
 .then(() => console.log('✅ MongoDB connected successfully'))
 .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// Routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/users', require('./routes/users'));
-app.use('/api/interviews', require('./routes/interviews'));
+// Routes (mounted at top-level, e.g. /auth, /users, /interviews)
+app.use('/auth', require('./routes/auth'));
+app.use('/users', require('./routes/users'));
+app.use('/interviews', require('./routes/interviews'));
 
 // Health check
-app.get('/api/health', (req, res) => {
+app.get('/health', (req, res) => {
   res.json({ 
     message: 'Server is running!', 
     timestamp: new Date().toISOString(),
@@ -64,12 +66,26 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ message: 'Route not found' });
-});
+// Serve frontend static files when available (single-server deployment)
+const distPath = path.join(__dirname, '..', 'frontend', 'dist');
+if (fs.existsSync(distPath)) {
+  console.log('🔷 Serving frontend from', distPath);
+  // Serve static assets
+  app.use(express.static(distPath));
 
-const PORT = process.env.PORT || 5000;
+  // For any route not starting with / (auth|users|interviews|health), serve index.html (client-side routing)
+  // This regex matches any path that does not start with the API top-level segments we use
+  app.get(/^\/(?!auth|users|interviews|health).*/, (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+} else {
+  // 404 handler for API-only mode
+  app.use('*', (req, res) => {
+    res.status(404).json({ message: 'Route not found' });
+  });
+}
+
+const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);

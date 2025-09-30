@@ -5,7 +5,7 @@ const User = require('../models/User');
 const UnfinishedInterview = require('../models/UnfinishedInterview');
 const router = express.Router();
 
-// @route   GET /api/interviews/unfinished/:email
+// @route   GET /interviews/unfinished/:email
 // @desc    Get unfinished (in-progress) interview for a user by email
 // @access  Public
 router.get('/unfinished/:email', async (req, res) => {
@@ -83,7 +83,7 @@ router.post('/create', async (req, res) => {
   }
 });
 
-// @route   PUT /api/interviews/:interviewId/question
+// @route   PUT /interviews/:interviewId/question
 // @desc    Add or update question in the unfinished interviews collection
 // @access  Public
 router.put('/:interviewId/question', async (req, res) => {
@@ -167,7 +167,7 @@ router.put('/:interviewId/question', async (req, res) => {
   }
 });
 
-// @route   PUT /api/interviews/:interviewId/complete
+// @route   PUT /interviews/:interviewId/complete
 // @desc    Complete interview
 // @access  Public
 router.put('/:interviewId/complete', async (req, res) => {
@@ -283,7 +283,7 @@ router.put('/:interviewId/complete', async (req, res) => {
   }
 });
 
-// @route   GET /api/interviews/all
+// @route   GET /interviews/all
 // @desc    Get all interviews for dashboard
 // @access  Public
 router.get('/all', async (req, res) => {
@@ -366,7 +366,7 @@ router.get('/all', async (req, res) => {
   }
 });
 
-// @route   GET /api/interviews/user/:email
+// @route   GET /interviews/user/:email
 // @desc    Get user interviews by email
 // @access  Public
 router.get('/user/:email', async (req, res) => {
@@ -409,7 +409,7 @@ router.get('/user/:email', async (req, res) => {
   }
 });
 
-// @route   GET /api/interviews/:interviewId
+// @route   GET /interviews/:interviewId
 // @desc    Get interview by ID
 // @access  Public
 router.get('/:interviewId', async (req, res) => {
