@@ -2,6 +2,7 @@
 const express = require('express');
 const Interview = require('../models/Interview');
 const User = require('../models/User');
+const UnfinishedInterview = require('../models/UnfinishedInterview');
 const router = express.Router();
 
 // @route   GET /api/interviews/unfinished/:email
@@ -18,14 +19,14 @@ router.get('/unfinished/:email', async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    // Find most recent unfinished interview
-    const interview = await Interview.findOne({ user: user._id, status: 'in-progress' })
+    // Find most recent unfinished interview in the separate collection
+    const unfinished = await UnfinishedInterview.findOne({ user: user._id })
       .sort({ startedAt: -1 })
       .select('-__v');
-    if (!interview) {
+    if (!unfinished) {
       return res.json({ success: true, interview: null });
     }
-    res.json({ success: true, interview });
+    res.json({ success: true, interview: unfinished });
   } catch (error) {
     console.error('Get unfinished interview error:', error);
     res.status(500).json({ message: 'Server error getting unfinished interview', error: process.env.NODE_ENV === 'development' ? error.message : undefined });
@@ -48,26 +49,28 @@ router.post('/create', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Create new interview
-    const interview = new Interview({
-      user: user._id,
-      candidateInfo: candidateInfo || {
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        resumeText: user.resumeData?.text || ''
-      }
-    });
+    // Create (or return existing) unfinished interview in separate collection
+    let unfinished = await UnfinishedInterview.findOne({ user: user._id }).sort({ startedAt: -1 });
+    if (!unfinished) {
+      unfinished = new UnfinishedInterview({
+        user: user._id,
+        candidateInfo: candidateInfo || {
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          resumeText: user.resumeData?.text || ''
+        }
+      });
 
-    await interview.save();
+      await unfinished.save();
+    }
 
     res.status(201).json({
       success: true,
       interview: {
-        id: interview._id,
-        candidateInfo: interview.candidateInfo,
-        status: interview.status,
-        startedAt: interview.startedAt
+        id: unfinished._id,
+        candidateInfo: unfinished.candidateInfo,
+        startedAt: unfinished.startedAt
       }
     });
 
@@ -81,7 +84,7 @@ router.post('/create', async (req, res) => {
 });
 
 // @route   PUT /api/interviews/:interviewId/question
-// @desc    Add or update interview question
+// @desc    Add or update question in the unfinished interviews collection
 // @access  Public
 router.put('/:interviewId/question', async (req, res) => {
   try {
@@ -92,23 +95,51 @@ router.put('/:interviewId/question', async (req, res) => {
       return res.status(400).json({ message: 'Question data is required' });
     }
 
-    const interview = await Interview.findById(interviewId);
-    if (!interview) {
-      return res.status(404).json({ message: 'Interview not found' });
+    // Try unfinished interview first
+    let unfinished = await UnfinishedInterview.findById(interviewId);
+
+    // If not found in unfinished, fall back to Interview collection (backwards compatibility)
+    if (!unfinished) {
+      const existingInterview = await Interview.findById(interviewId);
+      if (!existingInterview) {
+        return res.status(404).json({ message: 'Interview not found' });
+      }
+      // Operate on the Interview document directly if created previously
+      const existingQuestionIndex = existingInterview.questions.findIndex(q => q.id === questionData.id);
+      if (existingQuestionIndex !== -1) {
+        const existingQuestion = existingInterview.questions[existingQuestionIndex];
+        existingInterview.questions[existingQuestionIndex] = {
+          ...existingQuestion,
+          ...questionData,
+          answered: questionData.answered ?? existingQuestion.answered,
+          answer: questionData.answer ?? existingQuestion.answer,
+          score: questionData.score ?? existingQuestion.score,
+          timeTaken: questionData.timeTaken ?? existingQuestion.timeTaken,
+          feedback: questionData.feedback ?? existingQuestion.feedback
+        };
+      } else {
+        existingInterview.questions.push({
+          ...questionData,
+          answered: questionData.answered || false,
+          answer: questionData.answer || null,
+          score: questionData.score || null,
+          timeTaken: questionData.timeTaken || null,
+          feedback: questionData.feedback || null
+        });
+      }
+
+      await existingInterview.save();
+
+      return res.json({ success: true, message: 'Question updated in interview', question: questionData });
     }
 
-    // Find existing question or add new one
-    const existingQuestionIndex = interview.questions.findIndex(
-      q => q.id === questionData.id
-    );
-
+    // Update or add question in unfinished interview
+    const existingQuestionIndex = unfinished.questions.findIndex(q => q.id === questionData.id);
     if (existingQuestionIndex !== -1) {
-      // Update existing question, ensuring answered state and answer are preserved
-      const existingQuestion = interview.questions[existingQuestionIndex];
-      interview.questions[existingQuestionIndex] = {
+      const existingQuestion = unfinished.questions[existingQuestionIndex];
+      unfinished.questions[existingQuestionIndex] = {
         ...existingQuestion,
         ...questionData,
-        // Ensure these fields are explicitly set if provided
         answered: questionData.answered ?? existingQuestion.answered,
         answer: questionData.answer ?? existingQuestion.answer,
         score: questionData.score ?? existingQuestion.score,
@@ -116,10 +147,8 @@ router.put('/:interviewId/question', async (req, res) => {
         feedback: questionData.feedback ?? existingQuestion.feedback
       };
     } else {
-      // Add new question
-      interview.questions.push({
+      unfinished.questions.push({
         ...questionData,
-        // Ensure these fields have default values
         answered: questionData.answered || false,
         answer: questionData.answer || null,
         score: questionData.score || null,
@@ -128,27 +157,13 @@ router.put('/:interviewId/question', async (req, res) => {
       });
     }
 
-    // Update interview status
-    const allAnswered = interview.questions.every(q => q.answered);
-    if (allAnswered && interview.questions.length === 6) {
-      interview.status = 'completed';
-      interview.completedAt = new Date();
-    }
+    await unfinished.save();
 
-    await interview.save();
-
-    res.json({
-      success: true,
-      message: 'Question updated successfully',
-      question: questionData
-    });
+    res.json({ success: true, message: 'Question updated successfully', question: questionData });
 
   } catch (error) {
     console.error('Update question error:', error);
-    res.status(500).json({ 
-      message: 'Server error updating question',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    res.status(500).json({ message: 'Server error updating question', error: process.env.NODE_ENV === 'development' ? error.message : undefined });
   }
 });
 
@@ -160,6 +175,66 @@ router.put('/:interviewId/complete', async (req, res) => {
     const { interviewId } = req.params;
     const { allAnswers, createNewSession } = req.body;
 
+    // Try to find an unfinished interview first
+    let unfinished = await UnfinishedInterview.findById(interviewId);
+
+    // If unfinished exists, merge answers into it and then move to Interview collection
+    if (unfinished) {
+      if (allAnswers && Array.isArray(allAnswers)) {
+        allAnswers.forEach(answer => {
+          const questionIndex = unfinished.questions.findIndex(q => q.id === answer.id);
+          if (questionIndex !== -1) {
+            unfinished.questions[questionIndex] = {
+              ...unfinished.questions[questionIndex],
+              ...answer,
+              answered: true
+            };
+          }
+        });
+      }
+
+      // Create a new Interview document from the unfinished one
+      const interviewData = {
+        user: unfinished.user,
+        candidateInfo: unfinished.candidateInfo,
+        questions: unfinished.questions.map(q => ({
+          id: q.id,
+          question: q.question,
+          difficulty: q.difficulty,
+          timeLimit: q.timeLimit,
+          answered: q.answered || false,
+          answer: q.answer || null,
+          score: q.score || null,
+          timeTaken: q.timeTaken || null,
+          feedback: q.feedback || null,
+          timedOut: q.timedOut || false
+        })),
+        status: 'completed',
+        startedAt: unfinished.startedAt,
+        completedAt: new Date()
+      };
+
+      const newInterview = new Interview(interviewData);
+      await newInterview.save();
+
+      // Remove the unfinished document
+      await UnfinishedInterview.findByIdAndDelete(unfinished._id);
+
+      return res.json({
+        success: true,
+        message: 'Unfinished interview completed and moved to interviews collection',
+        interview: {
+          id: newInterview._id,
+          totalScore: newInterview.totalScore,
+          averageScore: newInterview.averageScore,
+          status: newInterview.status,
+          completedAt: newInterview.completedAt,
+          duration: newInterview.duration
+        }
+      });
+    }
+
+    // If not in unfinished, fall back to Interview collection (existing behavior)
     const interview = await Interview.findById(interviewId);
     if (!interview) {
       return res.status(404).json({ message: 'Interview not found' });
@@ -168,60 +243,13 @@ router.put('/:interviewId/complete', async (req, res) => {
     // Merge provided answers into a working questions array
     if (allAnswers && Array.isArray(allAnswers)) {
       allAnswers.forEach(answer => {
-        const questionIndex = interview.questions.findIndex(
-          q => q.id === answer.id
-        );
+        const questionIndex = interview.questions.findIndex(q => q.id === answer.id);
         if (questionIndex !== -1) {
           interview.questions[questionIndex] = {
             ...interview.questions[questionIndex],
             ...answer,
             answered: true
           };
-        }
-      });
-    }
-
-    // If requested, create a new interview document (preserve original as abandoned)
-    if (createNewSession) {
-      // Build new interview doc with merged questions
-      const mergedQuestions = interview.questions.map(q => ({
-        id: q.id,
-        question: q.question,
-        difficulty: q.difficulty,
-        timeLimit: q.timeLimit,
-        answered: q.answered || false,
-        answer: q.answer || null,
-        score: q.score || null,
-        timeTaken: q.timeTaken || null,
-        feedback: q.feedback || null,
-        timedOut: q.timedOut || false
-      }));
-
-      const newInterview = new Interview({
-        user: interview.user,
-        candidateInfo: interview.candidateInfo,
-        questions: mergedQuestions,
-        status: 'completed',
-        startedAt: interview.startedAt,
-        completedAt: new Date()
-      });
-
-      await newInterview.save();
-
-      // Mark original interview as abandoned so dashboard shows both
-      interview.status = 'abandoned';
-      await interview.save();
-
-      return res.json({
-        success: true,
-        message: 'Resumed interview completed and new session created',
-        interview: {
-          id: newInterview._id,
-          totalScore: newInterview.totalScore,
-          averageScore: newInterview.averageScore,
-          status: newInterview.status,
-          completedAt: newInterview.completedAt,
-          duration: newInterview.duration
         }
       });
     }
@@ -251,10 +279,7 @@ router.put('/:interviewId/complete', async (req, res) => {
 
   } catch (error) {
     console.error('Complete interview error:', error);
-    res.status(500).json({ 
-      message: 'Server error completing interview',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    res.status(500).json({ message: 'Server error completing interview', error: process.env.NODE_ENV === 'development' ? error.message : undefined });
   }
 });
 
@@ -268,32 +293,69 @@ router.get('/all', async (req, res) => {
     // Build query
     let query = {};
     if (status && status !== 'all') {
-      query.status = status;
+      // For filtering, if status is 'in-progress' we will filter UnfinishedInterview documents
+      if (status === 'in-progress') {
+        query._status = 'in-progress';
+      } else {
+        query.status = status;
+      }
     }
-    
-    // Search functionality
-    if (search) {
-      query.$or = [
-        { 'candidateInfo.name': new RegExp(search, 'i') },
-        { 'candidateInfo.email': new RegExp(search, 'i') },
-        { 'candidateInfo.phone': new RegExp(search, 'i') }
-      ];
-    }
-    
+
+    // Search functionality for both collections
+    const searchRegex = search ? new RegExp(search, 'i') : null;
+
     // Sort options
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
-    
-    const interviews = await Interview.find(query)
-      .populate('user', 'name email phone')
-      .sort(sortOptions)
-      .select('-__v');
 
-    res.json({
-      success: true,
-      count: interviews.length,
-      interviews
-    });
+    // Fetch completed interviews
+    let completed = [];
+    if (!status || status === 'all' || status === 'completed' || status === 'abandoned') {
+      const completedQuery = {};
+      if (status === 'abandoned') completedQuery.status = 'abandoned';
+      if (searchRegex) {
+        completedQuery.$or = [
+          { 'candidateInfo.name': searchRegex },
+          { 'candidateInfo.email': searchRegex },
+          { 'candidateInfo.phone': searchRegex }
+        ];
+      }
+      completed = await Interview.find(completedQuery)
+        .populate('user', 'name email phone')
+        .select('-__v')
+        .lean();
+    }
+
+    // Fetch unfinished interviews
+    let unfinished = [];
+    if (!status || status === 'all' || status === 'in-progress') {
+      const unfinishedQuery = {};
+      if (searchRegex) {
+        unfinishedQuery.$or = [
+          { 'candidateInfo.name': searchRegex },
+          { 'candidateInfo.email': searchRegex },
+          { 'candidateInfo.phone': searchRegex }
+        ];
+      }
+      unfinished = await UnfinishedInterview.find(unfinishedQuery)
+        .select('-__v')
+        .lean();
+
+      // Map unfinished to have similar fields as Interview
+      unfinished = unfinished.map(u => ({
+        ...u,
+        status: 'in-progress'
+      }));
+    }
+
+    const combined = [...completed, ...unfinished]
+      .sort((a, b) => {
+        const dateA = new Date(a.completedAt || a.startedAt || 0);
+        const dateB = new Date(b.completedAt || b.startedAt || 0);
+        return sortOptions[sortBy] === -1 ? dateB - dateA : dateA - dateB;
+      });
+
+    res.json({ success: true, count: combined.length, interviews: combined });
 
   } catch (error) {
     console.error('Get all interviews error:', error);
@@ -317,14 +379,26 @@ router.get('/user/:email', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const interviews = await Interview.find({ user: user._id })
-      .sort({ startedAt: -1 })
-      .select('-__v');
+    // Fetch completed interviews
+    const completed = await Interview.find({ user: user._id })
+      .select('-__v')
+      .lean();
 
-    res.json({
-      success: true,
-      interviews
-    });
+    // Fetch unfinished interviews and map to similar shape (mark as in-progress)
+    const unfinished = await UnfinishedInterview.find({ user: user._id })
+      .select('-__v')
+      .lean();
+
+    const unfinishedMapped = unfinished.map(u => ({
+      ...u,
+      status: 'in-progress',
+      id: u._id
+    }));
+
+    const combined = [...completed.map(c => ({ ...c, id: c._id })), ...unfinishedMapped]
+      .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+
+    res.json({ success: true, interviews: combined });
 
   } catch (error) {
     console.error('Get user interviews error:', error);
@@ -342,7 +416,18 @@ router.get('/:interviewId', async (req, res) => {
   try {
     const { interviewId } = req.params;
 
-    const interview = await Interview.findById(interviewId)
+    // Try to find in UnfinishedInterview first
+    let interview = await UnfinishedInterview.findById(interviewId).select('-__v').lean();
+    if (interview) {
+      // attach a user object if possible
+      const user = await User.findById(interview.user).select('name email phone');
+      interview.user = user;
+      interview.status = 'in-progress';
+      return res.json({ success: true, interview });
+    }
+
+    // Fall back to completed interviews
+    interview = await Interview.findById(interviewId)
       .populate('user', 'name email phone')
       .select('-__v');
 
@@ -350,10 +435,7 @@ router.get('/:interviewId', async (req, res) => {
       return res.status(404).json({ message: 'Interview not found' });
     }
 
-    res.json({
-      success: true,
-      interview
-    });
+    res.json({ success: true, interview });
 
   } catch (error) {
     console.error('Get interview error:', error);

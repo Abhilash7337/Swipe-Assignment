@@ -645,7 +645,9 @@ const Chat = () => {
       }, 1000);
     }
     
-    setInterviewId(interview.id);
+  // Ensure we use either `id` (from some API responses) or `_id` (Mongoose) so subsequent
+  // backend updates have the correct interview identifier.
+  setInterviewId(interview.id || interview._id || null);
     setFinalCandidateInfo(interview.candidateInfo);
   };
 

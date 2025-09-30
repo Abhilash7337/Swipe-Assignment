@@ -206,7 +206,7 @@ const Dashboard = () => {
                   fontSize: '16px'
                 }}
               >
-                {score.toFixed(1)}
+                {typeof score === 'number' ? score.toFixed(1) : score}
               </div>
               <div style={{ fontSize: '12px', color: '#666' }}>/ 10</div>
             </div>
@@ -227,7 +227,10 @@ const Dashboard = () => {
       title: 'Completed',
       dataIndex: 'completedAt',
       key: 'completedAt',
-      render: (date) => date ? new Date(date).toLocaleDateString() : 'N/A',
+      render: (date, record) => {
+        const d = date || record.startedAt;
+        return d ? new Date(d).toLocaleDateString() : 'N/A';
+      },
       sorter: true,
     },
     {
@@ -353,7 +356,7 @@ const Dashboard = () => {
           columns={columns}
           dataSource={interviews}
           loading={loading}
-          rowKey="_id"
+          rowKey={(record) => record._id || record.id || record._doc?._id}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
