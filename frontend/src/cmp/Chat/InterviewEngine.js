@@ -136,7 +136,7 @@ const InterviewEngine = ({ candidateInfo, resumeText, onInterviewComplete, onQue
 
     try {
       const response = await axios.post(
-        'https://api-inference.huggingface.co/models/gpt2',
+        import.meta.env.VITE_HUGGINGFACE_MODEL_URL || 'https://api-inference.huggingface.co/models/gpt2',
         { inputs: prompt },
         {
           headers: {
@@ -240,7 +240,7 @@ const InterviewEngine = ({ candidateInfo, resumeText, onInterviewComplete, onQue
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       const response = await axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${geminiKey}`,
+        `${import.meta.env.VITE_GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent'}?key=${geminiKey}`,
         requestData,
         {
           headers: {
@@ -311,7 +311,7 @@ const InterviewEngine = ({ candidateInfo, resumeText, onInterviewComplete, onQue
         // Try one more time after waiting
         try {
           const retryResponse = await axios.post(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${geminiKey}`,
+            `${import.meta.env.VITE_GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent'}?key=${geminiKey}`,
             requestData,
             {
               headers: {
@@ -416,7 +416,7 @@ const InterviewEngine = ({ candidateInfo, resumeText, onInterviewComplete, onQue
 
     try {
       const response = await axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${geminiKey}`,
+        `${import.meta.env.VITE_GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent'}?key=${geminiKey}`,
         requestData,
         {
           headers: {
